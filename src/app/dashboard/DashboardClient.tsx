@@ -313,7 +313,7 @@ export default function DashboardClient() {
       <section className={cardClassName}>
         <h2 className="mb-3 text-lg font-semibold text-white">Last 30 days</h2>
 
-        {weightedItems.length === 0 ? (
+        {items.length === 0 ? (
           <p className="text-slate-300">No logs yet.</p>
         ) : (
           <div className="space-y-2">
@@ -326,17 +326,7 @@ export default function DashboardClient() {
                   className="grid grid-cols-[1fr_auto] items-center rounded-lg border border-white/10 bg-white/5 px-3 py-2"
                 >
                   <div className="font-mono text-sm text-slate-200">{x.dateKey}</div>
-                  <div className="flex items-center gap-2 text-sm font-medium">
-                    <span
-                      className={
-                        trendDisplay[trendByDate.get(x.dateKey) ?? "none"].className
-                      }
-                      aria-hidden="true"
-                    >
-                      {trendDisplay[trendByDate.get(x.dateKey) ?? "none"].icon}
-                    </span>
-                    <span className="text-white">{formatWeight(x.weightKg)} kg</span>
-                  </div>
+                  <div className="text-sm font-medium text-white">{formatWeight(x.weightKg)} kg</div>
                 </div>
               ))}
           </div>
