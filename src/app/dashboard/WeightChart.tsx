@@ -58,9 +58,9 @@ export default function WeightChart({ items }: { items: LogItem[] }) {
             dot={{ r: 4 }}
           >
             <LabelList
-              dataKey="weight"
-              position="top"
-              formatter={(v: number) => v.toFixed(1)}
+            dataKey="weight"
+            position="top"
+            formatter={(v) => (typeof v === "number" ? v.toFixed(1) : String(v ?? ""))}
             />
           </Line>
         </LineChart>
