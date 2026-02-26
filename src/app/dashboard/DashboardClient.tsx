@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import WeightChart from "./WeightChart";
 
-type UserId = "A" | "B" | "C";
+type UserId = "Eric" | "Jun" | "Jaehah";
 
 type LogItem = {
   userId: UserId;
@@ -40,7 +40,7 @@ function formatWeight(w?: number | null) {
 }
 
 export default function DashboardClient() {
-  const [userId, setUserId] = useState<UserId>("A");
+  const [userId, setUserId] = useState<UserId>("Eric");
 
   // today entry
   const [weight, setWeight] = useState("");
@@ -62,7 +62,7 @@ export default function DashboardClient() {
   // 유저 선택 기억(로컬)
   useEffect(() => {
     const saved = localStorage.getItem("wt_userId");
-    if (saved === "A" || saved === "B" || saved === "C") setUserId(saved);
+    if (saved === "Eric" || saved === "Jun" || saved === "Jaehah") setUserId(saved);
   }, []);
   useEffect(() => {
     localStorage.setItem("wt_userId", userId);
@@ -191,9 +191,9 @@ export default function DashboardClient() {
           value={userId}
           onChange={(e) => setUserId(e.target.value as UserId)}
         >
-          <option value="A">A</option>
-          <option value="B">B</option>
-          <option value="C">C</option>
+          <option value="Eric">Eric</option>
+          <option value="Jun">Jun</option>
+          <option value="Jaehah">Jaehah</option>
         </select>
 
         <span className="text-sm text-gray-500">

@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { getDb, ensureIndexes } from "@/lib/mongo";
 
-const ALLOWED_USERS = ["A", "B", "C"] as const;
+const ALLOWED_USERS = ["Eric", "Jun", "Jaehah"] as const;
 type UserId = (typeof ALLOWED_USERS)[number];
 
 function isValidDateKey(s: string) {
