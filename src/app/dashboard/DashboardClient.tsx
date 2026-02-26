@@ -12,6 +12,8 @@ type LogItem = {
   note?: string | null;
 };
 
+type Trend = "up" | "down" | "same" | "none";
+
 function toDateKey(d: Date) {
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, "0");
@@ -176,6 +178,45 @@ export default function DashboardClient() {
     setEditWeight(found?.weightKg != null ? String(found.weightKg) : "");
   }, [editDate, items]);
 
+  const weightedItems = useMemo(
+    () => items.filter((x) => typeof x.weightKg === "number"),
+    [items]
+  );
+
+  const trendByDate = useMemo(() => {
+    const sorted = weightedItems
+      .slice()
+      .sort((a, b) => a.dateKey.localeCompare(b.dateKey));
+
+    const trendMap = new Map<string, Trend>();
+    let previousWeight: number | null = null;
+
+    sorted.forEach((item) => {
+      const currentWeight = item.weightKg as number;
+
+      if (previousWeight == null) {
+        trendMap.set(item.dateKey, "none");
+      } else if (currentWeight > previousWeight) {
+        trendMap.set(item.dateKey, "up");
+      } else if (currentWeight < previousWeight) {
+        trendMap.set(item.dateKey, "down");
+      } else {
+        trendMap.set(item.dateKey, "same");
+      }
+
+      previousWeight = currentWeight;
+    });
+
+    return trendMap;
+  }, [weightedItems]);
+
+  const trendDisplay = {
+    up: { icon: "⬆️", className: "text-rose-300" },
+    down: { icon: "⬇️", className: "text-emerald-300" },
+    same: { icon: "➡️", className: "text-slate-300" },
+    none: { icon: "•", className: "text-slate-400" },
+  } as const;
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -276,7 +317,7 @@ export default function DashboardClient() {
           <p className="text-slate-300">No logs yet.</p>
         ) : (
           <div className="space-y-2">
-            {items
+            {weightedItems
               .slice()
               .reverse()
               .map((x) => (
