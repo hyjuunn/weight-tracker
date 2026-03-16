@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import {
   LineChart,
   Line,
@@ -26,6 +27,18 @@ export default function WeightChart({ items }: { items: LogItem[] }) {
     }))
     .sort((a, b) => a.dateKey.localeCompare(b.dateKey));
 
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    const media = window.matchMedia("(max-width: 640px)");
+    const update = () => setIsMobile(media.matches);
+    update();
+    media.addEventListener("change", update);
+    return () => media.removeEventListener("change", update);
+  }, []);
+
+  const xAxisInterval = isMobile ? Math.max(0, Math.ceil(data.length / 6) - 1) : 0;
+
   if (data.length === 0) {
     return <p className="text-sm text-slate-300">No weight data to chart yet.</p>;
   }
@@ -43,7 +56,14 @@ export default function WeightChart({ items }: { items: LogItem[] }) {
       <ResponsiveContainer width="100%" height="100%">
         <LineChart data={data} margin={{ top: 20, right: 16, bottom: 10, left: 0 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.12)" />
-          <XAxis dataKey="dateLabel" tick={{ fill: "#cbd5e1", fontSize: 12 }} axisLine={{ stroke: "rgba(255,255,255,0.2)" }} tickLine={{ stroke: "rgba(255,255,255,0.2)" }} />
+          <XAxis
+            dataKey="dateLabel"
+            interval={xAxisInterval}
+            minTickGap={isMobile ? 22 : 10}
+            tick={{ fill: "#cbd5e1", fontSize: isMobile ? 10 : 12 }}
+            axisLine={{ stroke: "rgba(255,255,255,0.2)" }}
+            tickLine={{ stroke: "rgba(255,255,255,0.2)" }}
+          />
           <YAxis
             domain={[yMin, yMax]}
             tick={{ fill: "#cbd5e1", fontSize: 12 }}
@@ -71,15 +91,17 @@ export default function WeightChart({ items }: { items: LogItem[] }) {
             dot={{ r: 4, strokeWidth: 2, fill: "#0b0d12", stroke: "#f8fafc" }}
             activeDot={{ r: 6, fill: "#f8fafc", stroke: "#0b0d12", strokeWidth: 2 }}
           >
-            <LabelList
-              dataKey="weight"
-              position="top"
-              fill="#e2e8f0"
-              fontSize={12}
-              formatter={(v) =>
-                typeof v === "number" ? v.toFixed(1) : String(v ?? "")
-              }
-            />
+            {!isMobile ? (
+              <LabelList
+                dataKey="weight"
+                position="top"
+                fill="#e2e8f0"
+                fontSize={12}
+                formatter={(v) =>
+                  typeof v === "number" ? v.toFixed(1) : String(v ?? "")
+                }
+              />
+            ) : null}
           </Line>
         </LineChart>
       </ResponsiveContainer>

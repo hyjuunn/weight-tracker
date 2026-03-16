@@ -22,6 +22,7 @@ export async function ensureIndexes() {
   const db = await getDb();
   const logs = db.collection("daily_logs");
   const photos = db.collection("food_photos");
+  const bodyPhotos = db.collection("body_photos");
 
   // 하루(userId+dateKey) 유니크 보장
   await logs.createIndex({ userId: 1, dateKey: 1 }, { unique: true });
@@ -32,4 +33,7 @@ export async function ensureIndexes() {
   // 갤러리 조회 성능용
   await photos.createIndex({ createdAt: -1, _id: -1 });
   await photos.createIndex({ userId: 1, dateKey: -1 });
+
+  await bodyPhotos.createIndex({ createdAt: -1, _id: -1 });
+  await bodyPhotos.createIndex({ userId: 1, dateKey: -1 });
 }
