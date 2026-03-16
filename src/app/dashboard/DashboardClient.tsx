@@ -775,28 +775,35 @@ export default function DashboardClient() {
           </section>
 
           {expandedFoodPhoto ? (
-            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4" onClick={() => setExpandedFoodPhoto(null)}>
-              <div className="max-h-[95vh] w-full max-w-4xl rounded-2xl border border-white/20 bg-slate-950 p-3" onClick={(e) => e.stopPropagation()}>
-                <div className="mb-3 flex items-center justify-between text-sm text-slate-200">
-                  <div>
-                    <span className="font-semibold text-white">{expandedFoodPhoto.userId}</span> · {expandedFoodPhoto.dateKey}
+            <div className="fixed inset-0 z-50 overflow-y-auto bg-black/80" onClick={() => setExpandedFoodPhoto(null)}>
+              <div className="flex min-h-full items-center justify-center p-4">
+                <div
+                  className="w-full max-w-4xl rounded-2xl border border-white/20 bg-slate-950 p-3"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <div className="mb-3 flex items-center justify-between text-sm text-slate-200">
+                    <div>
+                      <span className="font-semibold text-white">{expandedFoodPhoto.userId}</span> · {expandedFoodPhoto.dateKey}
+                    </div>
+                    <button
+                      type="button"
+                      className="rounded-md border border-white/30 px-3 py-1 text-xs text-white hover:bg-white/10"
+                      onClick={() => setExpandedFoodPhoto(null)}
+                    >
+                      Close
+                    </button>
                   </div>
-                  <button
-                    type="button"
-                    className="rounded-md border border-white/30 px-3 py-1 text-xs text-white hover:bg-white/10"
-                    onClick={() => setExpandedFoodPhoto(null)}
-                  >
-                    Close
-                  </button>
+                  <div className="flex justify-center">
+                    <Image
+                      src={expandedFoodPhoto.imageDataUrl}
+                      alt={`${expandedFoodPhoto.userId} food on ${expandedFoodPhoto.dateKey}`}
+                      width={1200}
+                      height={900}
+                      className="max-h-[calc(100vh-9rem)] w-auto max-w-full rounded-lg object-contain"
+                      unoptimized
+                    />
+                  </div>
                 </div>
-                <Image
-                  src={expandedFoodPhoto.imageDataUrl}
-                  alt={`${expandedFoodPhoto.userId} food on ${expandedFoodPhoto.dateKey}`}
-                  width={1200}
-                  height={900}
-                  className="max-h-[80vh] w-full rounded-lg object-contain"
-                  unoptimized
-                />
               </div>
             </div>
           ) : null}
@@ -907,49 +914,53 @@ export default function DashboardClient() {
           </section>
 
           {expandedProgressPhoto ? (
-            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 p-4" onClick={() => setExpandedProgressIndex(null)}>
-              <div className="w-full max-w-5xl rounded-2xl border border-white/20 bg-slate-950 p-3" onClick={(e) => e.stopPropagation()}>
-                <div className="mb-3 flex items-center justify-between text-sm text-slate-200">
-                  <div className="font-mono">{expandedProgressPhoto.dateKey}</div>
-                  <button
-                    type="button"
-                    className="rounded-md border border-white/30 px-3 py-1 text-xs text-white hover:bg-white/10"
-                    onClick={() => setExpandedProgressIndex(null)}
-                  >
-                    Close
-                  </button>
-                </div>
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    className="h-10 w-10 shrink-0 rounded-full border border-white/30 text-lg text-white hover:bg-white/10"
-                    onClick={() => {
-                      if (sortedProgressItems.length === 0 || expandedProgressIndex == null) return;
-                      setExpandedProgressIndex(
-                        (expandedProgressIndex - 1 + sortedProgressItems.length) % sortedProgressItems.length
-                      );
-                    }}
-                  >
-                    ‹
-                  </button>
-                  <Image
-                    src={expandedProgressPhoto.imageDataUrl}
-                    alt={`${expandedProgressPhoto.userId} progression on ${expandedProgressPhoto.dateKey}`}
-                    width={1400}
-                    height={1000}
-                    className="max-h-[80vh] w-full rounded-lg object-contain"
-                    unoptimized
-                  />
-                  <button
-                    type="button"
-                    className="h-10 w-10 shrink-0 rounded-full border border-white/30 text-lg text-white hover:bg-white/10"
-                    onClick={() => {
-                      if (sortedProgressItems.length === 0 || expandedProgressIndex == null) return;
-                      setExpandedProgressIndex((expandedProgressIndex + 1) % sortedProgressItems.length);
-                    }}
-                  >
-                    ›
-                  </button>
+            <div className="fixed inset-0 z-50 overflow-y-auto bg-black/85" onClick={() => setExpandedProgressIndex(null)}>
+              <div className="flex min-h-full items-center justify-center p-4">
+                <div className="w-full max-w-5xl rounded-2xl border border-white/20 bg-slate-950 p-3" onClick={(e) => e.stopPropagation()}>
+                  <div className="mb-3 flex items-center justify-between text-sm text-slate-200">
+                    <div className="font-mono">{expandedProgressPhoto.dateKey}</div>
+                    <button
+                      type="button"
+                      className="rounded-md border border-white/30 px-3 py-1 text-xs text-white hover:bg-white/10"
+                      onClick={() => setExpandedProgressIndex(null)}
+                    >
+                      Close
+                    </button>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      className="h-10 w-10 shrink-0 rounded-full border border-white/30 text-lg text-white hover:bg-white/10"
+                      onClick={() => {
+                        if (sortedProgressItems.length === 0 || expandedProgressIndex == null) return;
+                        setExpandedProgressIndex(
+                          (expandedProgressIndex - 1 + sortedProgressItems.length) % sortedProgressItems.length
+                        );
+                      }}
+                    >
+                      ‹
+                    </button>
+                    <div className="flex min-w-0 flex-1 justify-center">
+                      <Image
+                        src={expandedProgressPhoto.imageDataUrl}
+                        alt={`${expandedProgressPhoto.userId} progression on ${expandedProgressPhoto.dateKey}`}
+                        width={1400}
+                        height={1000}
+                        className="max-h-[calc(100vh-9rem)] w-auto max-w-full rounded-lg object-contain"
+                        unoptimized
+                      />
+                    </div>
+                    <button
+                      type="button"
+                      className="h-10 w-10 shrink-0 rounded-full border border-white/30 text-lg text-white hover:bg-white/10"
+                      onClick={() => {
+                        if (sortedProgressItems.length === 0 || expandedProgressIndex == null) return;
+                        setExpandedProgressIndex((expandedProgressIndex + 1) % sortedProgressItems.length);
+                      }}
+                    >
+                      ›
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
