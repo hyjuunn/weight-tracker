@@ -751,7 +751,7 @@ export default function DashboardClient() {
                         <div className="space-y-2 px-3 py-2 text-sm text-slate-200">
                           <div className="font-medium text-white">{photo.userId}</div>
                           <div className="font-mono">
-                          {photo.dateKey} (Weight: {formatWeight(weightByDate.get(photo.dateKey))} kg)
+                          {photo.dateKey}
                         </div>
                           {isMine ? (
                             <button
