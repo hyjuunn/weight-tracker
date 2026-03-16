@@ -23,6 +23,8 @@ type FoodPhotoItem = {
 
 type Trend = "up" | "down" | "same" | "none";
 type TabKey = "weight" | "gallery";
+type GallerySortBy = "date" | "person";
+type GallerySortDir = "desc" | "asc";
 
 function toDateKey(d: Date) {
   const y = d.getFullYear();
@@ -78,6 +80,8 @@ export default function DashboardClient() {
   const [galleryHasMore, setGalleryHasMore] = useState(false);
   const [galleryLoadingMore, setGalleryLoadingMore] = useState(false);
   const [onlyMyPhotos, setOnlyMyPhotos] = useState(false);
+  const [gallerySortBy, setGallerySortBy] = useState<GallerySortBy>("date");
+  const [gallerySortDir, setGallerySortDir] = useState<GallerySortDir>("desc");
   const [expandedPhoto, setExpandedPhoto] = useState<FoodPhotoItem | null>(null);
 
   const todayKey = useMemo(() => toDateKey(new Date()), []);
@@ -327,6 +331,27 @@ export default function DashboardClient() {
     [items]
   );
 
+  const sortedGalleryItems = useMemo(() => {
+    return galleryItems.slice().sort((a, b) => {
+      if (gallerySortBy === "person") {
+        const byUser = a.userId.localeCompare(b.userId);
+        if (byUser !== 0) return gallerySortDir === "asc" ? byUser : -byUser;
+
+        const byDate = a.dateKey.localeCompare(b.dateKey);
+        if (byDate !== 0) return gallerySortDir === "asc" ? byDate : -byDate;
+
+        const byCreatedAt = new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+        return gallerySortDir === "asc" ? byCreatedAt : -byCreatedAt;
+      }
+
+      const byDate = a.dateKey.localeCompare(b.dateKey);
+      if (byDate !== 0) return gallerySortDir === "asc" ? byDate : -byDate;
+
+      const byCreatedAt = new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+      return gallerySortDir === "asc" ? byCreatedAt : -byCreatedAt;
+    });
+  }, [galleryItems, gallerySortBy, gallerySortDir]);
+
   const trendByDate = useMemo(() => {
     const sorted = weightedItems
       .slice()
@@ -564,15 +589,41 @@ export default function DashboardClient() {
             <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
               <h2 className="text-lg font-semibold text-white">Food gallery</h2>
 
-              <label className="flex items-center gap-2 text-sm text-slate-200">
-                <input
-                  type="checkbox"
-                  className="h-4 w-4 accent-indigo-400"
-                  checked={onlyMyPhotos}
-                  onChange={(e) => setOnlyMyPhotos(e.target.checked)}
-                />
-                Only my photos
-              </label>
+              <div className="flex flex-wrap items-center gap-3">
+                <label className="flex items-center gap-2 text-sm text-slate-200">
+                  <input
+                    type="checkbox"
+                    className="h-4 w-4 accent-indigo-400"
+                    checked={onlyMyPhotos}
+                    onChange={(e) => setOnlyMyPhotos(e.target.checked)}
+                  />
+                  Only my photos
+                </label>
+
+                <label className="flex items-center gap-2 text-sm text-slate-200">
+                  <span>Sort by</span>
+                  <select
+                    className="h-9 rounded-lg border border-white/20 bg-black/35 px-2 text-sm text-white outline-none focus:border-white/40"
+                    value={gallerySortBy}
+                    onChange={(e) => setGallerySortBy(e.target.value as GallerySortBy)}
+                  >
+                    <option value="date">Date</option>
+                    <option value="person">Person</option>
+                  </select>
+                </label>
+
+                <label className="flex items-center gap-2 text-sm text-slate-200">
+                  <span>Order</span>
+                  <select
+                    className="h-9 rounded-lg border border-white/20 bg-black/35 px-2 text-sm text-white outline-none focus:border-white/40"
+                    value={gallerySortDir}
+                    onChange={(e) => setGallerySortDir(e.target.value as GallerySortDir)}
+                  >
+                    <option value="desc">Newest / Z→A</option>
+                    <option value="asc">Oldest / A→Z</option>
+                  </select>
+                </label>
+              </div>
             </div>
 
             {galleryItems.length === 0 && !galleryLoading ? (
@@ -580,7 +631,7 @@ export default function DashboardClient() {
             ) : (
               <>
                 <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                  {galleryItems.map((photo) => {
+                  {sortedGalleryItems.map((photo) => {
                     const isMine = photo.userId === userId;
                     return (
                       <article
