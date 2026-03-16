@@ -71,20 +71,14 @@ const fileInputClassName =
 export default function DashboardClient() {
   const [userId, setUserId] = useState<UserId>("Eric");
   const [activeTab, setActiveTab] = useState<TabKey>("weight");
-  const [weight, setWeight] = useState("");
-  const [note, setNote] = useState("");
-  const [editDate, setEditDate] = useState<string>(() => toDateKey(new Date()));
-  const [editWeight, setEditWeight] = useState("");
+  const [entryDate, setEntryDate] = useState<string>(() => toDateKey(new Date()));
+  const [entryWeight, setEntryWeight] = useState("");
+  const [entryNote, setEntryNote] = useState("");
+  const [entryBodyFiles, setEntryBodyFiles] = useState<File[]>([]);
   const [items, setItems] = useState<LogItem[]>([]);
   const [loading, setLoading] = useState(false);
-  const [savingToday, setSavingToday] = useState(false);
-  const [savingEdit, setSavingEdit] = useState(false);
+  const [savingEntry, setSavingEntry] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  const [todayBodyFiles, setTodayBodyFiles] = useState<File[]>([]);
-  const [editBodyFiles, setEditBodyFiles] = useState<File[]>([]);
-  const [savingTodayBody, setSavingTodayBody] = useState(false);
-  const [savingEditBody, setSavingEditBody] = useState(false);
 
   const [foodDate, setFoodDate] = useState<string>(() => toDateKey(new Date()));
   const [foodFiles, setFoodFiles] = useState<File[]>([]);
@@ -139,11 +133,6 @@ export default function DashboardClient() {
       const loaded: LogItem[] = data.items ?? [];
       setItems(loaded);
 
-      const today = loaded.find((x) => x.dateKey === todayKey);
-      setWeight(today?.weightKg != null ? String(today.weightKg) : "");
-      setNote(today?.note ?? "");
-      setEditDate(todayKey);
-      setEditWeight(today?.weightKg != null ? String(today.weightKg) : "");
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Unknown error");
     } finally {
@@ -222,9 +211,10 @@ export default function DashboardClient() {
   }
 
   useEffect(() => {
+    setEntryDate(todayKey);
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [userId]);
+  }, [userId, todayKey]);
 
   useEffect(() => {
     loadFoodGallery(true);
@@ -253,56 +243,37 @@ export default function DashboardClient() {
     if (!res.ok) throw new Error(data?.error ?? `Save failed (${res.status})`);
   }
 
-  async function saveToday() {
-    const weightKg = parseWeight(weight);
+  async function saveWeightAndBodyEntry() {
+    const weightKg = parseWeight(entryWeight);
     if (Number.isNaN(weightKg)) {
       alert("Invalid weight. Use a number between 0 and 500.");
       return;
     }
-
-    setSavingToday(true);
-    setError(null);
-
-    try {
-      await saveLog({
-        userId,
-        dateKey: todayKey,
-        weightKg,
-        note: note.trim() === "" ? null : note.trim(),
-      });
-      await load();
-    } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : "Save failed");
-    } finally {
-      setSavingToday(false);
-    }
-  }
-
-  async function saveEdit() {
-    const weightKg = parseWeight(editWeight);
-    if (Number.isNaN(weightKg)) {
-      alert("Invalid weight. Use a number between 0 and 500.");
-      return;
-    }
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(editDate)) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(entryDate)) {
       alert("Invalid date.");
       return;
     }
 
-    setSavingEdit(true);
+    setSavingEntry(true);
     setError(null);
 
     try {
       await saveLog({
         userId,
-        dateKey: editDate,
+        dateKey: entryDate,
         weightKg,
+        note: entryNote.trim() === "" ? null : entryNote.trim(),
       });
+
+      if (entryBodyFiles.length > 0) {
+        await saveBodyImages(entryBodyFiles, entryDate, () => setEntryBodyFiles([]));
+      }
+
       await load();
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Save failed");
     } finally {
-      setSavingEdit(false);
+      setSavingEntry(false);
     }
   }
 
@@ -314,12 +285,8 @@ export default function DashboardClient() {
     setProgressFiles(Array.from(e.target.files ?? []));
   }
 
-  function onTodayBodyFileChange(e: ChangeEvent<HTMLInputElement>) {
-    setTodayBodyFiles(Array.from(e.target.files ?? []));
-  }
-
-  function onEditBodyFileChange(e: ChangeEvent<HTMLInputElement>) {
-    setEditBodyFiles(Array.from(e.target.files ?? []));
+  function onEntryBodyFileChange(e: ChangeEvent<HTMLInputElement>) {
+    setEntryBodyFiles(Array.from(e.target.files ?? []));
   }
 
   async function fileToDataUrl(file: File) {
@@ -405,18 +372,6 @@ export default function DashboardClient() {
     setProgressSaving(false);
   }
 
-  async function uploadTodayBodyPhoto() {
-    setSavingTodayBody(true);
-    await saveBodyImages(todayBodyFiles, todayKey, () => setTodayBodyFiles([]));
-    setSavingTodayBody(false);
-  }
-
-  async function uploadEditBodyPhoto() {
-    setSavingEditBody(true);
-    await saveBodyImages(editBodyFiles, editDate, () => setEditBodyFiles([]));
-    setSavingEditBody(false);
-  }
-
   async function deleteFoodPhoto(photoId: string) {
     const confirmed = window.confirm("Delete this photo?");
     if (!confirmed) return;
@@ -468,9 +423,10 @@ export default function DashboardClient() {
   }
 
   useEffect(() => {
-    const found = items.find((x) => x.dateKey === editDate);
-    setEditWeight(found?.weightKg != null ? String(found.weightKg) : "");
-  }, [editDate, items]);
+    const found = items.find((x) => x.dateKey === entryDate);
+    setEntryWeight(found?.weightKg != null ? String(found.weightKg) : "");
+    setEntryNote(found?.note ?? "");
+  }, [entryDate, items]);
 
   const weightedItems = useMemo(() => items.filter((x) => typeof x.weightKg === "number"), [items]);
 
@@ -599,108 +555,53 @@ export default function DashboardClient() {
             </div>
           ) : null}
 
-          <div className="grid gap-6 lg:grid-cols-2">
-            <section className={cardClassName}>
-              <h2 className="text-lg font-semibold text-white">Today ({todayKey})</h2>
-              <p className="mt-1 text-sm text-slate-300">Log your current weight and notes.</p>
+          <section className={cardClassName}>
+            <h2 className="text-lg font-semibold text-white">Weight & body photo entry</h2>
+            <p className="mt-1 text-sm text-slate-300">
+              Use today by default, or choose any past date to update your weight and progression photo together.
+            </p>
 
-              <div className="mt-4 grid gap-3 sm:grid-cols-[1fr_auto]">
-                <input
-                  className={inputClassName}
-                  inputMode="decimal"
-                  placeholder="Weight (kg)"
-                  value={weight}
-                  onChange={(e) => setWeight(e.target.value)}
-                />
-                <button
-                  className="h-12 rounded-xl bg-white px-5 text-base font-semibold text-black transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-60"
-                  onClick={saveToday}
-                  disabled={savingToday}
-                >
-                  {savingToday ? "Saving..." : "Save"}
-                </button>
-              </div>
-
-              <textarea
-                className="mt-3 w-full rounded-xl border border-white/15 bg-black/35 px-4 py-3 text-base text-white placeholder:text-slate-400 outline-none transition focus:border-white/40 focus:ring-2 focus:ring-indigo-400/50"
-                rows={4}
-                placeholder="Note (optional)"
-                value={note}
-                onChange={(e) => setNote(e.target.value)}
+            <div className="mt-4 space-y-3">
+              <input
+                type="date"
+                className={inputClassName}
+                value={entryDate}
+                onChange={(e) => setEntryDate(e.target.value)}
+                max={todayKey}
               />
-
-              <div className="mt-4 rounded-xl border border-white/10 bg-black/20 p-3">
-                <p className="text-sm font-medium text-white">Add body photo (today)</p>
-                <div className="mt-2 grid gap-3 sm:grid-cols-[1fr_auto]">
-                  <input
-                    type="file"
-                    accept="image/jpeg,image/png,image/webp,image/heic,image/heif"
-                    multiple
-                    className={fileInputClassName}
-                    onChange={onTodayBodyFileChange}
-                  />
-                  <button
-                    className="h-12 rounded-xl border border-white/20 bg-black/25 px-5 text-sm font-semibold text-white transition hover:border-white/35 hover:bg-black/35 disabled:opacity-60"
-                    onClick={uploadTodayBodyPhoto}
-                    disabled={savingTodayBody}
-                  >
-                    {savingTodayBody ? "Uploading..." : "Upload photo"}
-                  </button>
-                </div>
+              <input
+                className={inputClassName}
+                inputMode="decimal"
+                placeholder="Weight (kg)"
+                value={entryWeight}
+                onChange={(e) => setEntryWeight(e.target.value)}
+              />
+              <textarea
+                className="w-full rounded-xl border border-white/15 bg-black/35 px-4 py-3 text-base text-white placeholder:text-slate-400 outline-none transition focus:border-white/40 focus:ring-2 focus:ring-indigo-400/50"
+                rows={3}
+                placeholder="Note (optional)"
+                value={entryNote}
+                onChange={(e) => setEntryNote(e.target.value)}
+              />
+              <input
+                type="file"
+                accept="image/jpeg,image/png,image/webp,image/heic,image/heif"
+                multiple
+                className={fileInputClassName}
+                onChange={onEntryBodyFileChange}
+              />
+              <div className="text-sm text-slate-300">
+                {entryBodyFiles.length > 0 ? `${entryBodyFiles.length} body photo(s) selected` : "No body photos selected"}
               </div>
-            </section>
-
-            <section className={cardClassName}>
-              <h2 className="text-lg font-semibold text-white">Edit past date</h2>
-              <p className="mt-1 text-sm text-slate-300">Pick a date and overwrite the logged weight.</p>
-
-              <div className="mt-4 space-y-3">
-                <input
-                  type="date"
-                  className={inputClassName}
-                  value={editDate}
-                  onChange={(e) => setEditDate(e.target.value)}
-                  max={todayKey}
-                />
-                <div className="grid gap-3 sm:grid-cols-[1fr_auto]">
-                  <input
-                    className={inputClassName}
-                    inputMode="decimal"
-                    placeholder="Weight (kg)"
-                    value={editWeight}
-                    onChange={(e) => setEditWeight(e.target.value)}
-                  />
-                  <button
-                    className="h-12 rounded-xl border border-white/20 bg-black/25 px-5 text-base font-semibold text-white transition hover:border-white/35 hover:bg-black/35 disabled:cursor-not-allowed disabled:opacity-60"
-                    onClick={saveEdit}
-                    disabled={savingEdit}
-                  >
-                    {savingEdit ? "Saving..." : "Update"}
-                  </button>
-                </div>
-              </div>
-
-              <div className="mt-4 rounded-xl border border-white/10 bg-black/20 p-3">
-                <p className="text-sm font-medium text-white">Add body photo (selected date)</p>
-                <div className="mt-2 grid gap-3 sm:grid-cols-[1fr_auto]">
-                  <input
-                    type="file"
-                    accept="image/jpeg,image/png,image/webp,image/heic,image/heif"
-                    multiple
-                    className={fileInputClassName}
-                    onChange={onEditBodyFileChange}
-                  />
-                  <button
-                    className="h-12 rounded-xl border border-white/20 bg-black/25 px-5 text-sm font-semibold text-white transition hover:border-white/35 hover:bg-black/35 disabled:opacity-60"
-                    onClick={uploadEditBodyPhoto}
-                    disabled={savingEditBody}
-                  >
-                    {savingEditBody ? "Uploading..." : "Upload photo"}
-                  </button>
-                </div>
-              </div>
-            </section>
-          </div>
+              <button
+                className="h-12 rounded-xl bg-white px-5 text-base font-semibold text-black transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-60"
+                onClick={saveWeightAndBodyEntry}
+                disabled={savingEntry}
+              >
+                {savingEntry ? "Saving..." : "Save entry"}
+              </button>
+            </div>
+          </section>
 
           <section className={cardClassName}>
             <h2 className="mb-3 text-lg font-semibold text-white">Weight chart (last 30 days)</h2>
