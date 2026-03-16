@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import Image from "next/image";
+import { ChangeEvent, useEffect, useMemo, useState } from "react";
 import WeightChart from "./WeightChart";
 
 type UserId = "Eric" | "Jun" | "Jaehah";
@@ -12,7 +13,16 @@ type LogItem = {
   note?: string | null;
 };
 
+type FoodPhotoItem = {
+  id: string;
+  userId: UserId;
+  dateKey: string;
+  imageDataUrl: string;
+  createdAt: string;
+};
+
 type Trend = "up" | "down" | "same" | "none";
+type TabKey = "weight" | "gallery";
 
 function toDateKey(d: Date) {
   const y = d.getFullYear();
@@ -47,6 +57,7 @@ const inputClassName =
 
 export default function DashboardClient() {
   const [userId, setUserId] = useState<UserId>("Eric");
+  const [activeTab, setActiveTab] = useState<TabKey>("weight");
   const [weight, setWeight] = useState("");
   const [note, setNote] = useState("");
   const [editDate, setEditDate] = useState<string>(() => toDateKey(new Date()));
@@ -56,6 +67,13 @@ export default function DashboardClient() {
   const [savingToday, setSavingToday] = useState(false);
   const [savingEdit, setSavingEdit] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const [galleryDate, setGalleryDate] = useState<string>(() => toDateKey(new Date()));
+  const [galleryFiles, setGalleryFiles] = useState<File[]>([]);
+  const [galleryItems, setGalleryItems] = useState<FoodPhotoItem[]>([]);
+  const [galleryLoading, setGalleryLoading] = useState(false);
+  const [gallerySaving, setGallerySaving] = useState(false);
+  const [galleryError, setGalleryError] = useState<string | null>(null);
 
   const todayKey = useMemo(() => toDateKey(new Date()), []);
   const fromKey = useMemo(() => toDateKey(addDays(new Date(), -30)), []);
@@ -99,8 +117,30 @@ export default function DashboardClient() {
     }
   }
 
+  async function loadGallery() {
+    setGalleryLoading(true);
+    setGalleryError(null);
+
+    try {
+      const res = await fetch("/api/food-photos?limit=5", { cache: "no-store" });
+      const data = await res.json().catch(() => ({}));
+
+      if (!res.ok) {
+        throw new Error(data?.error ?? `Failed to load gallery (${res.status})`);
+      }
+
+      const loaded: FoodPhotoItem[] = data.items ?? [];
+      setGalleryItems(loaded);
+    } catch (e: unknown) {
+      setGalleryError(e instanceof Error ? e.message : "Unknown error");
+    } finally {
+      setGalleryLoading(false);
+    }
+  }
+
   useEffect(() => {
     load();
+    loadGallery();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userId]);
 
@@ -173,6 +213,56 @@ export default function DashboardClient() {
     }
   }
 
+  function onGalleryFileChange(e: ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(e.target.files ?? []);
+    setGalleryFiles(files);
+  }
+
+  async function fileToDataUrl(file: File) {
+    return new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        if (typeof reader.result === "string") resolve(reader.result);
+        else reject(new Error("Failed to read image"));
+      };
+      reader.onerror = () => reject(new Error("Failed to read image"));
+      reader.readAsDataURL(file);
+    });
+  }
+
+  async function saveGalleryImages() {
+    if (galleryFiles.length === 0) {
+      alert("Please choose at least one food image.");
+      return;
+    }
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(galleryDate)) {
+      alert("Invalid date.");
+      return;
+    }
+
+    setGallerySaving(true);
+    setGalleryError(null);
+
+    try {
+      const images = await Promise.all(galleryFiles.map((file) => fileToDataUrl(file)));
+      const res = await fetch("/api/food-photos", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId, dateKey: galleryDate, images }),
+      });
+
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.error ?? `Upload failed (${res.status})`);
+
+      setGalleryFiles([]);
+      await loadGallery();
+    } catch (e: unknown) {
+      setGalleryError(e instanceof Error ? e.message : "Upload failed");
+    } finally {
+      setGallerySaving(false);
+    }
+  }
+
   useEffect(() => {
     const found = items.find((x) => x.dateKey === editDate);
     setEditWeight(found?.weightKg != null ? String(found.weightKg) : "");
@@ -233,105 +323,220 @@ export default function DashboardClient() {
           </select>
         </div>
 
-        <span className="text-sm text-slate-300">{loading ? "Loading latest entries..." : "Last 30 days overview"}</span>
+        <span className="text-sm text-slate-300">
+          {activeTab === "weight"
+            ? loading
+              ? "Loading latest entries..."
+              : "Last 30 days overview"
+            : galleryLoading
+              ? "Loading gallery..."
+              : "Recent shared food photos"}
+        </span>
       </div>
 
-      {error ? (
-        <div className="rounded-xl border border-rose-400/60 bg-rose-950/40 p-3 text-sm text-rose-100">
-          <span className="font-medium">Error:</span> {error}
-        </div>
-      ) : null}
+      <div className="flex gap-2 rounded-xl border border-white/10 bg-black/20 p-1">
+        <button
+          className={`flex-1 rounded-lg px-3 py-2 text-sm font-medium transition ${
+            activeTab === "weight"
+              ? "bg-white text-black"
+              : "text-slate-200 hover:bg-white/10"
+          }`}
+          onClick={() => setActiveTab("weight")}
+        >
+          Weight
+        </button>
+        <button
+          className={`flex-1 rounded-lg px-3 py-2 text-sm font-medium transition ${
+            activeTab === "gallery"
+              ? "bg-white text-black"
+              : "text-slate-200 hover:bg-white/10"
+          }`}
+          onClick={() => setActiveTab("gallery")}
+        >
+          Gallery
+        </button>
+      </div>
 
-      <div className="grid gap-6 lg:grid-cols-2">
-        <section className={cardClassName}>
-          <h2 className="text-lg font-semibold text-white">Today ({todayKey})</h2>
-          <p className="mt-1 text-sm text-slate-300">Log your current weight and notes.</p>
-
-          <div className="mt-4 grid gap-3 sm:grid-cols-[1fr_auto]">
-            <input
-              className={inputClassName}
-              inputMode="decimal"
-              placeholder="Weight (kg)"
-              value={weight}
-              onChange={(e) => setWeight(e.target.value)}
-            />
-            <button
-              className="h-12 rounded-xl bg-white px-5 text-base font-semibold text-black transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-60"
-              onClick={saveToday}
-              disabled={savingToday}
-            >
-              {savingToday ? "Saving..." : "Save"}
-            </button>
-          </div>
-
-          <textarea
-            className="mt-3 w-full rounded-xl border border-white/15 bg-black/35 px-4 py-3 text-base text-white placeholder:text-slate-400 outline-none transition focus:border-white/40 focus:ring-2 focus:ring-indigo-400/50"
-            rows={4}
-            placeholder="Note (optional)"
-            value={note}
-            onChange={(e) => setNote(e.target.value)}
-          />
-        </section>
-
-        <section className={cardClassName}>
-          <h2 className="text-lg font-semibold text-white">Edit past date</h2>
-          <p className="mt-1 text-sm text-slate-300">Pick a date and overwrite the logged weight.</p>
-
-          <div className="mt-4 space-y-3">
-            <input
-              type="date"
-              className={inputClassName}
-              value={editDate}
-              onChange={(e) => setEditDate(e.target.value)}
-              max={todayKey}
-            />
-            <div className="grid gap-3 sm:grid-cols-[1fr_auto]">
-              <input
-                className={inputClassName}
-                inputMode="decimal"
-                placeholder="Weight (kg)"
-                value={editWeight}
-                onChange={(e) => setEditWeight(e.target.value)}
-              />
-              <button
-                className="h-12 rounded-xl border border-white/20 bg-black/25 px-5 text-base font-semibold text-white transition hover:border-white/35 hover:bg-black/35 disabled:cursor-not-allowed disabled:opacity-60"
-                onClick={saveEdit}
-                disabled={savingEdit}
-              >
-                {savingEdit ? "Saving..." : "Update"}
-              </button>
+      {activeTab === "weight" ? (
+        <>
+          {error ? (
+            <div className="rounded-xl border border-rose-400/60 bg-rose-950/40 p-3 text-sm text-rose-100">
+              <span className="font-medium">Error:</span> {error}
             </div>
-          </div>
-        </section>
-      </div>
+          ) : null}
 
-      <section className={cardClassName}>
-        <h2 className="mb-3 text-lg font-semibold text-white">Weight chart (last 30 days)</h2>
-        <WeightChart items={items} />
-      </section>
+          <div className="grid gap-6 lg:grid-cols-2">
+            <section className={cardClassName}>
+              <h2 className="text-lg font-semibold text-white">Today ({todayKey})</h2>
+              <p className="mt-1 text-sm text-slate-300">Log your current weight and notes.</p>
 
-      <section className={cardClassName}>
-        <h2 className="mb-3 text-lg font-semibold text-white">Last 30 days</h2>
-
-        {items.length === 0 ? (
-          <p className="text-slate-300">No logs yet.</p>
-        ) : (
-          <div className="space-y-2">
-            {weightedItems
-              .slice()
-              .reverse()
-              .map((x) => (
-                <div
-                  key={`${x.userId}-${x.dateKey}`}
-                  className="grid grid-cols-[1fr_auto] items-center rounded-lg border border-white/10 bg-white/5 px-3 py-2"
+              <div className="mt-4 grid gap-3 sm:grid-cols-[1fr_auto]">
+                <input
+                  className={inputClassName}
+                  inputMode="decimal"
+                  placeholder="Weight (kg)"
+                  value={weight}
+                  onChange={(e) => setWeight(e.target.value)}
+                />
+                <button
+                  className="h-12 rounded-xl bg-white px-5 text-base font-semibold text-black transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-60"
+                  onClick={saveToday}
+                  disabled={savingToday}
                 >
-                  <div className="font-mono text-sm text-slate-200">{x.dateKey}</div>
-                  <div className="text-sm font-medium text-white">{formatWeight(x.weightKg)} kg</div>
+                  {savingToday ? "Saving..." : "Save"}
+                </button>
+              </div>
+
+              <textarea
+                className="mt-3 w-full rounded-xl border border-white/15 bg-black/35 px-4 py-3 text-base text-white placeholder:text-slate-400 outline-none transition focus:border-white/40 focus:ring-2 focus:ring-indigo-400/50"
+                rows={4}
+                placeholder="Note (optional)"
+                value={note}
+                onChange={(e) => setNote(e.target.value)}
+              />
+            </section>
+
+            <section className={cardClassName}>
+              <h2 className="text-lg font-semibold text-white">Edit past date</h2>
+              <p className="mt-1 text-sm text-slate-300">Pick a date and overwrite the logged weight.</p>
+
+              <div className="mt-4 space-y-3">
+                <input
+                  type="date"
+                  className={inputClassName}
+                  value={editDate}
+                  onChange={(e) => setEditDate(e.target.value)}
+                  max={todayKey}
+                />
+                <div className="grid gap-3 sm:grid-cols-[1fr_auto]">
+                  <input
+                    className={inputClassName}
+                    inputMode="decimal"
+                    placeholder="Weight (kg)"
+                    value={editWeight}
+                    onChange={(e) => setEditWeight(e.target.value)}
+                  />
+                  <button
+                    className="h-12 rounded-xl border border-white/20 bg-black/25 px-5 text-base font-semibold text-white transition hover:border-white/35 hover:bg-black/35 disabled:cursor-not-allowed disabled:opacity-60"
+                    onClick={saveEdit}
+                    disabled={savingEdit}
+                  >
+                    {savingEdit ? "Saving..." : "Update"}
+                  </button>
                 </div>
-              ))}
+              </div>
+            </section>
           </div>
-        )}
-      </section>
+
+          <section className={cardClassName}>
+            <h2 className="mb-3 text-lg font-semibold text-white">Weight chart (last 30 days)</h2>
+            <WeightChart items={items} />
+          </section>
+
+          <section className={cardClassName}>
+            <h2 className="mb-3 text-lg font-semibold text-white">Last 30 days</h2>
+
+            {items.length === 0 ? (
+              <p className="text-slate-300">No logs yet.</p>
+            ) : (
+              <div className="space-y-2">
+                {weightedItems
+                  .slice()
+                  .reverse()
+                  .map((x) => {
+                    const trend = trendByDate.get(x.dateKey) ?? "none";
+                    return (
+                      <div
+                        key={`${x.userId}-${x.dateKey}`}
+                        className="grid grid-cols-[1fr_auto_auto] items-center gap-3 rounded-lg border border-white/10 bg-white/5 px-3 py-2"
+                      >
+                        <div className="font-mono text-sm text-slate-200">{x.dateKey}</div>
+                        <div className={`text-sm ${trendDisplay[trend].className}`}>{trendDisplay[trend].icon}</div>
+                        <div className="text-sm font-medium text-white">{formatWeight(x.weightKg)} kg</div>
+                      </div>
+                    );
+                  })}
+              </div>
+            )}
+          </section>
+        </>
+      ) : (
+        <>
+          {galleryError ? (
+            <div className="rounded-xl border border-rose-400/60 bg-rose-950/40 p-3 text-sm text-rose-100">
+              <span className="font-medium">Error:</span> {galleryError}
+            </div>
+          ) : null}
+
+          <section className={cardClassName}>
+            <h2 className="text-lg font-semibold text-white">Upload food photos</h2>
+            <p className="mt-1 text-sm text-slate-300">
+              Share one or more photos with a selected date. Default date is today.
+            </p>
+
+            <div className="mt-4 grid gap-3 sm:grid-cols-2">
+              <input
+                type="date"
+                className={inputClassName}
+                value={galleryDate}
+                onChange={(e) => setGalleryDate(e.target.value)}
+                max={todayKey}
+              />
+              <input
+                type="file"
+                accept="image/jpeg,image/png,image/webp,image/heic,image/heif"
+                multiple
+                className="h-12 w-full rounded-xl border border-white/15 bg-black/35 px-3 text-sm text-slate-200 file:mr-3 file:rounded-lg file:border-0 file:bg-white file:px-3 file:py-2 file:text-sm file:font-semibold file:text-black"
+                onChange={onGalleryFileChange}
+              />
+            </div>
+
+            <div className="mt-3 text-sm text-slate-300">
+              {galleryFiles.length > 0
+                ? `${galleryFiles.length} file(s) selected`
+                : "No files selected"}
+            </div>
+
+            <button
+              className="mt-4 h-12 rounded-xl bg-white px-5 text-base font-semibold text-black transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-60"
+              onClick={saveGalleryImages}
+              disabled={gallerySaving}
+            >
+              {gallerySaving ? "Uploading..." : "Upload photos"}
+            </button>
+          </section>
+
+          <section className={cardClassName}>
+            <h2 className="mb-3 text-lg font-semibold text-white">Recent food gallery (5 latest)</h2>
+
+            {galleryItems.length === 0 ? (
+              <p className="text-slate-300">No food photos yet.</p>
+            ) : (
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                {galleryItems.map((photo) => (
+                  <article
+                    key={photo.id}
+                    className="overflow-hidden rounded-xl border border-white/10 bg-black/30"
+                  >
+                    <Image
+                      src={photo.imageDataUrl}
+                      alt={`${photo.userId} food on ${photo.dateKey}`}
+                      width={640}
+                      height={480}
+                      className="h-48 w-full object-cover"
+                      unoptimized
+                    />
+                    <div className="space-y-1 px-3 py-2 text-sm text-slate-200">
+                      <div className="font-medium text-white">{photo.userId}</div>
+                      <div className="font-mono">{photo.dateKey}</div>
+                    </div>
+                  </article>
+                ))}
+              </div>
+            )}
+          </section>
+        </>
+      )}
     </div>
   );
 }
