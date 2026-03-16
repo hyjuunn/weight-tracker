@@ -433,6 +433,14 @@ export default function DashboardClient() {
 
   const weightedItems = useMemo(() => items.filter((x) => typeof x.weightKg === "number"), [items]);
 
+  const weightByDate = useMemo(() => {
+    const map = new Map<string, number>();
+    weightedItems.forEach((item) => {
+      if (typeof item.weightKg === "number") map.set(item.dateKey, item.weightKg);
+    });
+    return map;
+  }, [weightedItems]);
+
   const sortedFoodItems = useMemo(() => {
     return foodItems.slice().sort((a, b) => {
       if (foodSortBy === "person") {
@@ -742,7 +750,9 @@ export default function DashboardClient() {
                         </button>
                         <div className="space-y-2 px-3 py-2 text-sm text-slate-200">
                           <div className="font-medium text-white">{photo.userId}</div>
-                          <div className="font-mono">{photo.dateKey}</div>
+                          <div className="font-mono">
+                          {photo.dateKey} (Weight: {formatWeight(weightByDate.get(photo.dateKey))} kg)
+                        </div>
                           {isMine ? (
                             <button
                               type="button"
@@ -887,7 +897,9 @@ export default function DashboardClient() {
                         />
                       </button>
                       <div className="space-y-2 px-3 py-2 text-sm text-slate-200">
-                        <div className="font-mono">{photo.dateKey}</div>
+                        <div className="font-mono">
+                          {photo.dateKey} (Weight: {formatWeight(weightByDate.get(photo.dateKey))} kg)
+                        </div>
                         <button
                           type="button"
                           className="rounded-md border border-rose-400/70 px-3 py-1 text-xs text-rose-200 transition hover:bg-rose-500/20 disabled:opacity-60"
@@ -925,7 +937,9 @@ export default function DashboardClient() {
                   <div className="flex h-dvh items-center justify-center p-4">
                     <div className="w-full max-w-5xl rounded-2xl border border-white/20 bg-slate-950 p-3" onClick={(e) => e.stopPropagation()}>
                       <div className="mb-3 flex items-center justify-between text-sm text-slate-200">
-                        <div className="font-mono">{expandedProgressPhoto.dateKey}</div>
+                        <div className="font-mono">
+                          {expandedProgressPhoto.dateKey} (Weight: {formatWeight(weightByDate.get(expandedProgressPhoto.dateKey))} kg)
+                        </div>
                         <button
                           type="button"
                           className="rounded-md border border-white/30 px-3 py-1 text-xs text-white hover:bg-white/10"
