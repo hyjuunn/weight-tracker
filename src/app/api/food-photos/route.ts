@@ -36,28 +36,63 @@ export async function GET(req: Request) {
 
   const { searchParams } = new URL(req.url);
   const limitRaw = searchParams.get("limit") ?? "5";
+  const userIdParam = searchParams.get("userId") ?? "";
+  const beforeCreatedAt = searchParams.get("beforeCreatedAt") ?? "";
+  const beforeId = searchParams.get("beforeId") ?? "";
   const limit = Math.min(Math.max(Number.parseInt(limitRaw, 10) || 5, 1), 25);
+
+  if (userIdParam && !isAllowedUser(userIdParam)) {
+    return NextResponse.json({ error: "Invalid userId" }, { status: 400 });
+  }
+
+  const query: {
+    userId?: UserId;
+    $or?: Array<{ createdAt: { $lt: Date } } | { createdAt: Date; _id: { $lt: ObjectId } }>;
+  } = {};
+
+  if (userIdParam) {
+    query.userId = userIdParam;
+  }
+
+  if (beforeCreatedAt || beforeId) {
+    if (!beforeCreatedAt || !beforeId) {
+      return NextResponse.json({ error: "beforeCreatedAt and beforeId are required together" }, { status: 400 });
+    }
+
+    const parsedDate = new Date(beforeCreatedAt);
+    if (Number.isNaN(parsedDate.getTime())) {
+      return NextResponse.json({ error: "Invalid beforeCreatedAt" }, { status: 400 });
+    }
+
+    if (!ObjectId.isValid(beforeId)) {
+      return NextResponse.json({ error: "Invalid beforeId" }, { status: 400 });
+    }
+
+    const parsedId = new ObjectId(beforeId);
+    query.$or = [{ createdAt: { $lt: parsedDate } }, { createdAt: parsedDate, _id: { $lt: parsedId } }];
+  }
 
   await ensureIndexes();
   const db = await getDb();
   const photos = db.collection("food_photos");
 
-  const items = await photos
-    .find({})
+  const docs = await photos
+    .find(query)
     .project({ _id: 1, userId: 1, dateKey: 1, imageDataUrl: 1, createdAt: 1 })
-    .sort({ createdAt: -1 })
-    .limit(limit)
+    .sort({ createdAt: -1, _id: -1 })
+    .limit(limit + 1)
     .toArray();
 
-  return NextResponse.json({
-    items: items.map((item) => ({
-      id: String(item._id),
-      userId: item.userId,
-      dateKey: item.dateKey,
-      imageDataUrl: item.imageDataUrl,
-      createdAt: item.createdAt,
-    })),
-  });
+  const hasMore = docs.length > limit;
+  const items = docs.slice(0, limit).map((item) => ({
+    id: String(item._id),
+    userId: item.userId,
+    dateKey: item.dateKey,
+    imageDataUrl: item.imageDataUrl,
+    createdAt: item.createdAt,
+  }));
+
+  return NextResponse.json({ items, hasMore });
 }
 
 export async function POST(req: Request) {
@@ -117,4 +152,33 @@ export async function POST(req: Request) {
   await photos.insertMany(docs);
 
   return NextResponse.json({ ok: true, inserted: docs.length });
+}
+
+export async function DELETE(req: Request) {
+  if (!(await requireSession())) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const body = await req.json().catch(() => null);
+  if (!body) return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
+
+  const { photoId, userId } = body as { photoId?: string; userId?: string };
+
+  if (!photoId || !ObjectId.isValid(photoId)) {
+    return NextResponse.json({ error: "Invalid photoId" }, { status: 400 });
+  }
+  if (!userId || !isAllowedUser(userId)) {
+    return NextResponse.json({ error: "Invalid userId" }, { status: 400 });
+  }
+
+  await ensureIndexes();
+  const db = await getDb();
+  const photos = db.collection("food_photos");
+
+  const result = await photos.deleteOne({ _id: new ObjectId(photoId), userId });
+  if (result.deletedCount === 0) {
+    return NextResponse.json({ error: "Photo not found or not owned by user" }, { status: 404 });
+  }
+
+  return NextResponse.json({ ok: true });
 }

@@ -30,6 +30,6 @@ export async function ensureIndexes() {
   //await logs.createIndex({ userId: 1, dateKey: 1 });
 
   // 갤러리 조회 성능용
-  await photos.createIndex({ createdAt: -1 });
+  await photos.createIndex({ createdAt: -1, _id: -1 });
   await photos.createIndex({ userId: 1, dateKey: -1 });
 }

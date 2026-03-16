@@ -73,7 +73,12 @@ export default function DashboardClient() {
   const [galleryItems, setGalleryItems] = useState<FoodPhotoItem[]>([]);
   const [galleryLoading, setGalleryLoading] = useState(false);
   const [gallerySaving, setGallerySaving] = useState(false);
+  const [galleryDeletingId, setGalleryDeletingId] = useState<string | null>(null);
   const [galleryError, setGalleryError] = useState<string | null>(null);
+  const [galleryHasMore, setGalleryHasMore] = useState(false);
+  const [galleryLoadingMore, setGalleryLoadingMore] = useState(false);
+  const [onlyMyPhotos, setOnlyMyPhotos] = useState(false);
+  const [expandedPhoto, setExpandedPhoto] = useState<FoodPhotoItem | null>(null);
 
   const todayKey = useMemo(() => toDateKey(new Date()), []);
   const fromKey = useMemo(() => toDateKey(addDays(new Date(), -30)), []);
@@ -117,12 +122,27 @@ export default function DashboardClient() {
     }
   }
 
-  async function loadGallery() {
-    setGalleryLoading(true);
+  async function loadGallery(reset: boolean) {
+    if (reset) {
+      setGalleryLoading(true);
+      setGalleryItems([]);
+    } else {
+      setGalleryLoadingMore(true);
+    }
     setGalleryError(null);
 
     try {
-      const res = await fetch("/api/food-photos?limit=5", { cache: "no-store" });
+      const params = new URLSearchParams();
+      params.set("limit", "5");
+      if (onlyMyPhotos) params.set("userId", userId);
+
+      if (!reset && galleryItems.length > 0) {
+        const lastItem = galleryItems[galleryItems.length - 1];
+        params.set("beforeCreatedAt", lastItem.createdAt);
+        params.set("beforeId", lastItem.id);
+      }
+
+      const res = await fetch(`/api/food-photos?${params.toString()}`, { cache: "no-store" });
       const data = await res.json().catch(() => ({}));
 
       if (!res.ok) {
@@ -130,19 +150,25 @@ export default function DashboardClient() {
       }
 
       const loaded: FoodPhotoItem[] = data.items ?? [];
-      setGalleryItems(loaded);
+      setGalleryItems((prev) => (reset ? loaded : [...prev, ...loaded]));
+      setGalleryHasMore(Boolean(data.hasMore));
     } catch (e: unknown) {
       setGalleryError(e instanceof Error ? e.message : "Unknown error");
     } finally {
       setGalleryLoading(false);
+      setGalleryLoadingMore(false);
     }
   }
 
   useEffect(() => {
     load();
-    loadGallery();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userId]);
+
+  useEffect(() => {
+    loadGallery(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userId, onlyMyPhotos]);
 
   async function saveLog(payload: {
     userId: UserId;
@@ -255,11 +281,39 @@ export default function DashboardClient() {
       if (!res.ok) throw new Error(data?.error ?? `Upload failed (${res.status})`);
 
       setGalleryFiles([]);
-      await loadGallery();
+      await loadGallery(true);
     } catch (e: unknown) {
       setGalleryError(e instanceof Error ? e.message : "Upload failed");
     } finally {
       setGallerySaving(false);
+    }
+  }
+
+  async function deletePhoto(photoId: string) {
+    const confirmed = window.confirm("Delete this photo?");
+    if (!confirmed) return;
+
+    setGalleryDeletingId(photoId);
+    setGalleryError(null);
+
+    try {
+      const res = await fetch("/api/food-photos", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ photoId, userId }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.error ?? `Delete failed (${res.status})`);
+
+      if (expandedPhoto?.id === photoId) {
+        setExpandedPhoto(null);
+      }
+
+      await loadGallery(true);
+    } catch (e: unknown) {
+      setGalleryError(e instanceof Error ? e.message : "Delete failed");
+    } finally {
+      setGalleryDeletingId(null);
     }
   }
 
@@ -507,34 +561,115 @@ export default function DashboardClient() {
           </section>
 
           <section className={cardClassName}>
-            <h2 className="mb-3 text-lg font-semibold text-white">Recent food gallery (5 latest)</h2>
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+              <h2 className="text-lg font-semibold text-white">Food gallery</h2>
 
-            {galleryItems.length === 0 ? (
+              <label className="flex items-center gap-2 text-sm text-slate-200">
+                <input
+                  type="checkbox"
+                  className="h-4 w-4 accent-indigo-400"
+                  checked={onlyMyPhotos}
+                  onChange={(e) => setOnlyMyPhotos(e.target.checked)}
+                />
+                Only my photos
+              </label>
+            </div>
+
+            {galleryItems.length === 0 && !galleryLoading ? (
               <p className="text-slate-300">No food photos yet.</p>
             ) : (
-              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                {galleryItems.map((photo) => (
-                  <article
-                    key={photo.id}
-                    className="overflow-hidden rounded-xl border border-white/10 bg-black/30"
-                  >
-                    <Image
-                      src={photo.imageDataUrl}
-                      alt={`${photo.userId} food on ${photo.dateKey}`}
-                      width={640}
-                      height={480}
-                      className="h-48 w-full object-cover"
-                      unoptimized
-                    />
-                    <div className="space-y-1 px-3 py-2 text-sm text-slate-200">
-                      <div className="font-medium text-white">{photo.userId}</div>
-                      <div className="font-mono">{photo.dateKey}</div>
-                    </div>
-                  </article>
-                ))}
-              </div>
+              <>
+                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                  {galleryItems.map((photo) => {
+                    const isMine = photo.userId === userId;
+                    return (
+                      <article
+                        key={photo.id}
+                        className="overflow-hidden rounded-xl border border-white/10 bg-black/30"
+                      >
+                        <button
+                          type="button"
+                          className="block w-full cursor-zoom-in"
+                          onClick={() => setExpandedPhoto(photo)}
+                        >
+                          <Image
+                            src={photo.imageDataUrl}
+                            alt={`${photo.userId} food on ${photo.dateKey}`}
+                            width={640}
+                            height={480}
+                            className="h-48 w-full object-cover"
+                            unoptimized
+                          />
+                        </button>
+                        <div className="space-y-2 px-3 py-2 text-sm text-slate-200">
+                          <div className="font-medium text-white">{photo.userId}</div>
+                          <div className="font-mono">{photo.dateKey}</div>
+                          {isMine ? (
+                            <button
+                              type="button"
+                              className="rounded-md border border-rose-400/70 px-3 py-1 text-xs text-rose-200 transition hover:bg-rose-500/20 disabled:opacity-60"
+                              onClick={() => deletePhoto(photo.id)}
+                              disabled={galleryDeletingId === photo.id}
+                            >
+                              {galleryDeletingId === photo.id ? "Deleting..." : "Delete"}
+                            </button>
+                          ) : null}
+                        </div>
+                      </article>
+                    );
+                  })}
+                </div>
+
+                <div className="mt-4 flex justify-center">
+                  {galleryHasMore ? (
+                    <button
+                      type="button"
+                      className="h-11 rounded-xl border border-white/25 px-4 text-sm font-semibold text-white transition hover:border-white/40 hover:bg-white/10 disabled:opacity-60"
+                      onClick={() => loadGallery(false)}
+                      disabled={galleryLoadingMore}
+                    >
+                      {galleryLoadingMore ? "Loading..." : "Show older photos"}
+                    </button>
+                  ) : (
+                    <p className="text-sm text-slate-400">You reached the oldest photo.</p>
+                  )}
+                </div>
+              </>
             )}
           </section>
+
+          {expandedPhoto ? (
+            <div
+              className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4"
+              onClick={() => setExpandedPhoto(null)}
+            >
+              <div
+                className="max-h-[95vh] w-full max-w-4xl rounded-2xl border border-white/20 bg-slate-950 p-3"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="mb-3 flex items-center justify-between text-sm text-slate-200">
+                  <div>
+                    <span className="font-semibold text-white">{expandedPhoto.userId}</span> · {expandedPhoto.dateKey}
+                  </div>
+                  <button
+                    type="button"
+                    className="rounded-md border border-white/30 px-3 py-1 text-xs text-white hover:bg-white/10"
+                    onClick={() => setExpandedPhoto(null)}
+                  >
+                    Close
+                  </button>
+                </div>
+                <Image
+                  src={expandedPhoto.imageDataUrl}
+                  alt={`${expandedPhoto.userId} food on ${expandedPhoto.dateKey}`}
+                  width={1200}
+                  height={900}
+                  className="max-h-[80vh] w-full rounded-lg object-contain"
+                  unoptimized
+                />
+              </div>
+            </div>
+          ) : null}
         </>
       )}
     </div>
