@@ -45,13 +45,15 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: "Invalid userId" }, { status: 400 });
   }
 
+  const userIdFilter: UserId | undefined = isAllowedUser(userIdParam) ? userIdParam : undefined;
+
   const query: {
     userId?: UserId;
     $or?: Array<{ createdAt: { $lt: Date } } | { createdAt: Date; _id: { $lt: ObjectId } }>;
   } = {};
 
-  if (userIdParam) {
-    query.userId = userIdParam;
+  if (userIdFilter) {
+    query.userId = userIdFilter;
   }
 
   if (beforeCreatedAt || beforeId) {
