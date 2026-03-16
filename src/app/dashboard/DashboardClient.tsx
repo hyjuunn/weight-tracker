@@ -21,10 +21,19 @@ type FoodPhotoItem = {
   createdAt: string;
 };
 
+type BodyPhotoItem = {
+  id: string;
+  userId: UserId;
+  dateKey: string;
+  imageDataUrl: string;
+  createdAt: string;
+};
+
 type Trend = "up" | "down" | "same" | "none";
-type TabKey = "weight" | "gallery";
+type TabKey = "weight" | "foodGallery" | "progression";
 type GallerySortBy = "date" | "person";
 type GallerySortDir = "desc" | "asc";
+type ProgressSortDir = "desc" | "asc";
 
 function toDateKey(d: Date) {
   const y = d.getFullYear();
@@ -56,6 +65,8 @@ const cardClassName =
   "rounded-2xl border border-white/10 bg-black/20 p-4 shadow-lg shadow-black/20 sm:p-5";
 const inputClassName =
   "h-12 w-full rounded-xl border border-white/15 bg-black/35 px-4 text-base text-white placeholder:text-slate-400 outline-none transition focus:border-white/40 focus:ring-2 focus:ring-indigo-400/50";
+const fileInputClassName =
+  "h-12 w-full rounded-xl border border-white/15 bg-black/35 px-3 py-2 text-sm leading-normal text-slate-200 file:mr-3 file:h-8 file:rounded-lg file:border-0 file:bg-white file:px-3 file:py-0 file:text-sm file:font-semibold file:leading-8 file:text-black file:align-middle";
 
 export default function DashboardClient() {
   const [userId, setUserId] = useState<UserId>("Eric");
@@ -70,19 +81,36 @@ export default function DashboardClient() {
   const [savingEdit, setSavingEdit] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const [galleryDate, setGalleryDate] = useState<string>(() => toDateKey(new Date()));
-  const [galleryFiles, setGalleryFiles] = useState<File[]>([]);
-  const [galleryItems, setGalleryItems] = useState<FoodPhotoItem[]>([]);
-  const [galleryLoading, setGalleryLoading] = useState(false);
-  const [gallerySaving, setGallerySaving] = useState(false);
-  const [galleryDeletingId, setGalleryDeletingId] = useState<string | null>(null);
-  const [galleryError, setGalleryError] = useState<string | null>(null);
-  const [galleryHasMore, setGalleryHasMore] = useState(false);
-  const [galleryLoadingMore, setGalleryLoadingMore] = useState(false);
-  const [onlyMyPhotos, setOnlyMyPhotos] = useState(false);
-  const [gallerySortBy, setGallerySortBy] = useState<GallerySortBy>("date");
-  const [gallerySortDir, setGallerySortDir] = useState<GallerySortDir>("desc");
-  const [expandedPhoto, setExpandedPhoto] = useState<FoodPhotoItem | null>(null);
+  const [todayBodyFiles, setTodayBodyFiles] = useState<File[]>([]);
+  const [editBodyFiles, setEditBodyFiles] = useState<File[]>([]);
+  const [savingTodayBody, setSavingTodayBody] = useState(false);
+  const [savingEditBody, setSavingEditBody] = useState(false);
+
+  const [foodDate, setFoodDate] = useState<string>(() => toDateKey(new Date()));
+  const [foodFiles, setFoodFiles] = useState<File[]>([]);
+  const [foodItems, setFoodItems] = useState<FoodPhotoItem[]>([]);
+  const [foodLoading, setFoodLoading] = useState(false);
+  const [foodSaving, setFoodSaving] = useState(false);
+  const [foodDeletingId, setFoodDeletingId] = useState<string | null>(null);
+  const [foodError, setFoodError] = useState<string | null>(null);
+  const [foodHasMore, setFoodHasMore] = useState(false);
+  const [foodLoadingMore, setFoodLoadingMore] = useState(false);
+  const [onlyMyFoodPhotos, setOnlyMyFoodPhotos] = useState(false);
+  const [foodSortBy, setFoodSortBy] = useState<GallerySortBy>("date");
+  const [foodSortDir, setFoodSortDir] = useState<GallerySortDir>("desc");
+  const [expandedFoodPhoto, setExpandedFoodPhoto] = useState<FoodPhotoItem | null>(null);
+
+  const [progressDate, setProgressDate] = useState<string>(() => toDateKey(new Date()));
+  const [progressFiles, setProgressFiles] = useState<File[]>([]);
+  const [progressItems, setProgressItems] = useState<BodyPhotoItem[]>([]);
+  const [progressLoading, setProgressLoading] = useState(false);
+  const [progressSaving, setProgressSaving] = useState(false);
+  const [progressDeletingId, setProgressDeletingId] = useState<string | null>(null);
+  const [progressError, setProgressError] = useState<string | null>(null);
+  const [progressHasMore, setProgressHasMore] = useState(false);
+  const [progressLoadingMore, setProgressLoadingMore] = useState(false);
+  const [progressSortDir, setProgressSortDir] = useState<ProgressSortDir>("desc");
+  const [expandedProgressIndex, setExpandedProgressIndex] = useState<number | null>(null);
 
   const todayKey = useMemo(() => toDateKey(new Date()), []);
   const fromKey = useMemo(() => toDateKey(addDays(new Date(), -30)), []);
@@ -101,15 +129,12 @@ export default function DashboardClient() {
     setError(null);
 
     try {
-      const res = await fetch(
-        `/api/logs?userId=${userId}&from=${fromKey}&to=${todayKey}`,
-        { cache: "no-store" }
-      );
+      const res = await fetch(`/api/logs?userId=${userId}&from=${fromKey}&to=${todayKey}`, {
+        cache: "no-store",
+      });
       const data = await res.json().catch(() => ({}));
 
-      if (!res.ok) {
-        throw new Error(data?.error ?? `Failed to load (${res.status})`);
-      }
+      if (!res.ok) throw new Error(data?.error ?? `Failed to load (${res.status})`);
 
       const loaded: LogItem[] = data.items ?? [];
       setItems(loaded);
@@ -126,41 +151,73 @@ export default function DashboardClient() {
     }
   }
 
-  async function loadGallery(reset: boolean) {
+  async function loadFoodGallery(reset: boolean) {
     if (reset) {
-      setGalleryLoading(true);
-      setGalleryItems([]);
+      setFoodLoading(true);
+      setFoodItems([]);
     } else {
-      setGalleryLoadingMore(true);
+      setFoodLoadingMore(true);
     }
-    setGalleryError(null);
+    setFoodError(null);
 
     try {
       const params = new URLSearchParams();
       params.set("limit", "5");
-      if (onlyMyPhotos) params.set("userId", userId);
+      if (onlyMyFoodPhotos) params.set("userId", userId);
 
-      if (!reset && galleryItems.length > 0) {
-        const lastItem = galleryItems[galleryItems.length - 1];
+      if (!reset && foodItems.length > 0) {
+        const lastItem = foodItems[foodItems.length - 1];
         params.set("beforeCreatedAt", lastItem.createdAt);
         params.set("beforeId", lastItem.id);
       }
 
       const res = await fetch(`/api/food-photos?${params.toString()}`, { cache: "no-store" });
       const data = await res.json().catch(() => ({}));
-
-      if (!res.ok) {
-        throw new Error(data?.error ?? `Failed to load gallery (${res.status})`);
-      }
+      if (!res.ok) throw new Error(data?.error ?? `Failed to load food gallery (${res.status})`);
 
       const loaded: FoodPhotoItem[] = data.items ?? [];
-      setGalleryItems((prev) => (reset ? loaded : [...prev, ...loaded]));
-      setGalleryHasMore(Boolean(data.hasMore));
+      setFoodItems((prev) => (reset ? loaded : [...prev, ...loaded]));
+      setFoodHasMore(Boolean(data.hasMore));
     } catch (e: unknown) {
-      setGalleryError(e instanceof Error ? e.message : "Unknown error");
+      setFoodError(e instanceof Error ? e.message : "Unknown error");
     } finally {
-      setGalleryLoading(false);
-      setGalleryLoadingMore(false);
+      setFoodLoading(false);
+      setFoodLoadingMore(false);
+    }
+  }
+
+  async function loadProgressGallery(reset: boolean) {
+    if (reset) {
+      setProgressLoading(true);
+      setProgressItems([]);
+    } else {
+      setProgressLoadingMore(true);
+    }
+    setProgressError(null);
+
+    try {
+      const params = new URLSearchParams();
+      params.set("limit", "8");
+      params.set("userId", userId);
+
+      if (!reset && progressItems.length > 0) {
+        const lastItem = progressItems[progressItems.length - 1];
+        params.set("beforeCreatedAt", lastItem.createdAt);
+        params.set("beforeId", lastItem.id);
+      }
+
+      const res = await fetch(`/api/body-photos?${params.toString()}`, { cache: "no-store" });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.error ?? `Failed to load progression gallery (${res.status})`);
+
+      const loaded: BodyPhotoItem[] = data.items ?? [];
+      setProgressItems((prev) => (reset ? loaded : [...prev, ...loaded]));
+      setProgressHasMore(Boolean(data.hasMore));
+    } catch (e: unknown) {
+      setProgressError(e instanceof Error ? e.message : "Unknown error");
+    } finally {
+      setProgressLoading(false);
+      setProgressLoadingMore(false);
     }
   }
 
@@ -170,9 +227,15 @@ export default function DashboardClient() {
   }, [userId]);
 
   useEffect(() => {
-    loadGallery(true);
+    loadFoodGallery(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [userId, onlyMyPhotos]);
+  }, [userId, onlyMyFoodPhotos]);
+
+  useEffect(() => {
+    loadProgressGallery(true);
+    setExpandedProgressIndex(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userId]);
 
   async function saveLog(payload: {
     userId: UserId;
@@ -243,9 +306,20 @@ export default function DashboardClient() {
     }
   }
 
-  function onGalleryFileChange(e: ChangeEvent<HTMLInputElement>) {
-    const files = Array.from(e.target.files ?? []);
-    setGalleryFiles(files);
+  function onFoodFileChange(e: ChangeEvent<HTMLInputElement>) {
+    setFoodFiles(Array.from(e.target.files ?? []));
+  }
+
+  function onProgressFileChange(e: ChangeEvent<HTMLInputElement>) {
+    setProgressFiles(Array.from(e.target.files ?? []));
+  }
+
+  function onTodayBodyFileChange(e: ChangeEvent<HTMLInputElement>) {
+    setTodayBodyFiles(Array.from(e.target.files ?? []));
+  }
+
+  function onEditBodyFileChange(e: ChangeEvent<HTMLInputElement>) {
+    setEditBodyFiles(Array.from(e.target.files ?? []));
   }
 
   async function fileToDataUrl(file: File) {
@@ -260,45 +334,95 @@ export default function DashboardClient() {
     });
   }
 
-  async function saveGalleryImages() {
-    if (galleryFiles.length === 0) {
+  async function saveFoodImages() {
+    if (foodFiles.length === 0) {
       alert("Please choose at least one food image.");
       return;
     }
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(galleryDate)) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(foodDate)) {
       alert("Invalid date.");
       return;
     }
 
-    setGallerySaving(true);
-    setGalleryError(null);
+    setFoodSaving(true);
+    setFoodError(null);
 
     try {
-      const images = await Promise.all(galleryFiles.map((file) => fileToDataUrl(file)));
+      const images = await Promise.all(foodFiles.map((file) => fileToDataUrl(file)));
       const res = await fetch("/api/food-photos", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userId, dateKey: galleryDate, images }),
+        body: JSON.stringify({ userId, dateKey: foodDate, images }),
       });
 
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data?.error ?? `Upload failed (${res.status})`);
 
-      setGalleryFiles([]);
-      await loadGallery(true);
+      setFoodFiles([]);
+      await loadFoodGallery(true);
     } catch (e: unknown) {
-      setGalleryError(e instanceof Error ? e.message : "Upload failed");
+      setFoodError(e instanceof Error ? e.message : "Upload failed");
     } finally {
-      setGallerySaving(false);
+      setFoodSaving(false);
     }
   }
 
-  async function deletePhoto(photoId: string) {
+  async function saveBodyImages(files: File[], dateKey: string, clearFiles: () => void) {
+    if (files.length === 0) {
+      alert("Please choose at least one body photo.");
+      return false;
+    }
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(dateKey)) {
+      alert("Invalid date.");
+      return false;
+    }
+
+    setProgressError(null);
+
+    try {
+      const images = await Promise.all(files.map((file) => fileToDataUrl(file)));
+      const res = await fetch("/api/body-photos", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId, dateKey, images }),
+      });
+
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.error ?? `Upload failed (${res.status})`);
+
+      clearFiles();
+      await loadProgressGallery(true);
+      return true;
+    } catch (e: unknown) {
+      setProgressError(e instanceof Error ? e.message : "Upload failed");
+      return false;
+    }
+  }
+
+  async function saveProgressImages() {
+    setProgressSaving(true);
+    await saveBodyImages(progressFiles, progressDate, () => setProgressFiles([]));
+    setProgressSaving(false);
+  }
+
+  async function uploadTodayBodyPhoto() {
+    setSavingTodayBody(true);
+    await saveBodyImages(todayBodyFiles, todayKey, () => setTodayBodyFiles([]));
+    setSavingTodayBody(false);
+  }
+
+  async function uploadEditBodyPhoto() {
+    setSavingEditBody(true);
+    await saveBodyImages(editBodyFiles, editDate, () => setEditBodyFiles([]));
+    setSavingEditBody(false);
+  }
+
+  async function deleteFoodPhoto(photoId: string) {
     const confirmed = window.confirm("Delete this photo?");
     if (!confirmed) return;
 
-    setGalleryDeletingId(photoId);
-    setGalleryError(null);
+    setFoodDeletingId(photoId);
+    setFoodError(null);
 
     try {
       const res = await fetch("/api/food-photos", {
@@ -309,15 +433,37 @@ export default function DashboardClient() {
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data?.error ?? `Delete failed (${res.status})`);
 
-      if (expandedPhoto?.id === photoId) {
-        setExpandedPhoto(null);
-      }
-
-      await loadGallery(true);
+      if (expandedFoodPhoto?.id === photoId) setExpandedFoodPhoto(null);
+      await loadFoodGallery(true);
     } catch (e: unknown) {
-      setGalleryError(e instanceof Error ? e.message : "Delete failed");
+      setFoodError(e instanceof Error ? e.message : "Delete failed");
     } finally {
-      setGalleryDeletingId(null);
+      setFoodDeletingId(null);
+    }
+  }
+
+  async function deleteBodyPhoto(photoId: string) {
+    const confirmed = window.confirm("Delete this photo?");
+    if (!confirmed) return;
+
+    setProgressDeletingId(photoId);
+    setProgressError(null);
+
+    try {
+      const res = await fetch("/api/body-photos", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ photoId, userId }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.error ?? `Delete failed (${res.status})`);
+
+      setExpandedProgressIndex(null);
+      await loadProgressGallery(true);
+    } catch (e: unknown) {
+      setProgressError(e instanceof Error ? e.message : "Delete failed");
+    } finally {
+      setProgressDeletingId(null);
     }
   }
 
@@ -326,53 +472,49 @@ export default function DashboardClient() {
     setEditWeight(found?.weightKg != null ? String(found.weightKg) : "");
   }, [editDate, items]);
 
-  const weightedItems = useMemo(
-    () => items.filter((x) => typeof x.weightKg === "number"),
-    [items]
-  );
+  const weightedItems = useMemo(() => items.filter((x) => typeof x.weightKg === "number"), [items]);
 
-  const sortedGalleryItems = useMemo(() => {
-    return galleryItems.slice().sort((a, b) => {
-      if (gallerySortBy === "person") {
+  const sortedFoodItems = useMemo(() => {
+    return foodItems.slice().sort((a, b) => {
+      if (foodSortBy === "person") {
         const byUser = a.userId.localeCompare(b.userId);
-        if (byUser !== 0) return gallerySortDir === "asc" ? byUser : -byUser;
-
-        const byDate = a.dateKey.localeCompare(b.dateKey);
-        if (byDate !== 0) return gallerySortDir === "asc" ? byDate : -byDate;
-
-        const byCreatedAt = new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
-        return gallerySortDir === "asc" ? byCreatedAt : -byCreatedAt;
+        if (byUser !== 0) return foodSortDir === "asc" ? byUser : -byUser;
       }
 
       const byDate = a.dateKey.localeCompare(b.dateKey);
-      if (byDate !== 0) return gallerySortDir === "asc" ? byDate : -byDate;
+      if (byDate !== 0) return foodSortDir === "asc" ? byDate : -byDate;
 
       const byCreatedAt = new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
-      return gallerySortDir === "asc" ? byCreatedAt : -byCreatedAt;
+      return foodSortDir === "asc" ? byCreatedAt : -byCreatedAt;
     });
-  }, [galleryItems, gallerySortBy, gallerySortDir]);
+  }, [foodItems, foodSortBy, foodSortDir]);
+
+  const sortedProgressItems = useMemo(() => {
+    return progressItems.slice().sort((a, b) => {
+      const byDate = a.dateKey.localeCompare(b.dateKey);
+      if (byDate !== 0) return progressSortDir === "asc" ? byDate : -byDate;
+
+      const byCreatedAt = new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+      return progressSortDir === "asc" ? byCreatedAt : -byCreatedAt;
+    });
+  }, [progressItems, progressSortDir]);
+
+  const expandedProgressPhoto =
+    expandedProgressIndex != null && sortedProgressItems.length > 0
+      ? sortedProgressItems[expandedProgressIndex]
+      : null;
 
   const trendByDate = useMemo(() => {
-    const sorted = weightedItems
-      .slice()
-      .sort((a, b) => a.dateKey.localeCompare(b.dateKey));
-
+    const sorted = weightedItems.slice().sort((a, b) => a.dateKey.localeCompare(b.dateKey));
     const trendMap = new Map<string, Trend>();
     let previousWeight: number | null = null;
 
     sorted.forEach((item) => {
       const currentWeight = item.weightKg as number;
-
-      if (previousWeight == null) {
-        trendMap.set(item.dateKey, "none");
-      } else if (currentWeight > previousWeight) {
-        trendMap.set(item.dateKey, "up");
-      } else if (currentWeight < previousWeight) {
-        trendMap.set(item.dateKey, "down");
-      } else {
-        trendMap.set(item.dateKey, "same");
-      }
-
+      if (previousWeight == null) trendMap.set(item.dateKey, "none");
+      else if (currentWeight > previousWeight) trendMap.set(item.dateKey, "up");
+      else if (currentWeight < previousWeight) trendMap.set(item.dateKey, "down");
+      else trendMap.set(item.dateKey, "same");
       previousWeight = currentWeight;
     });
 
@@ -407,18 +549,20 @@ export default function DashboardClient() {
             ? loading
               ? "Loading latest entries..."
               : "Last 30 days overview"
-            : galleryLoading
-              ? "Loading gallery..."
-              : "Recent shared food photos"}
+            : activeTab === "foodGallery"
+              ? foodLoading
+                ? "Loading food gallery..."
+                : "Recent shared food photos"
+              : progressLoading
+                ? "Loading progression photos..."
+                : `Body progression for ${userId}`}
         </span>
       </div>
 
       <div className="flex gap-2 rounded-xl border border-white/10 bg-black/20 p-1">
         <button
           className={`flex-1 rounded-lg px-3 py-2 text-sm font-medium transition ${
-            activeTab === "weight"
-              ? "bg-white text-black"
-              : "text-slate-200 hover:bg-white/10"
+            activeTab === "weight" ? "bg-white text-black" : "text-slate-200 hover:bg-white/10"
           }`}
           onClick={() => setActiveTab("weight")}
         >
@@ -426,13 +570,19 @@ export default function DashboardClient() {
         </button>
         <button
           className={`flex-1 rounded-lg px-3 py-2 text-sm font-medium transition ${
-            activeTab === "gallery"
-              ? "bg-white text-black"
-              : "text-slate-200 hover:bg-white/10"
+            activeTab === "foodGallery" ? "bg-white text-black" : "text-slate-200 hover:bg-white/10"
           }`}
-          onClick={() => setActiveTab("gallery")}
+          onClick={() => setActiveTab("foodGallery")}
         >
-          Gallery
+          Food Gallery
+        </button>
+        <button
+          className={`flex-1 rounded-lg px-3 py-2 text-sm font-medium transition ${
+            activeTab === "progression" ? "bg-white text-black" : "text-slate-200 hover:bg-white/10"
+          }`}
+          onClick={() => setActiveTab("progression")}
+        >
+          Progression
         </button>
       </div>
 
@@ -441,6 +591,11 @@ export default function DashboardClient() {
           {error ? (
             <div className="rounded-xl border border-rose-400/60 bg-rose-950/40 p-3 text-sm text-rose-100">
               <span className="font-medium">Error:</span> {error}
+            </div>
+          ) : null}
+          {progressError ? (
+            <div className="rounded-xl border border-amber-300/60 bg-amber-950/40 p-3 text-sm text-amber-100">
+              <span className="font-medium">Body photo upload:</span> {progressError}
             </div>
           ) : null}
 
@@ -473,6 +628,26 @@ export default function DashboardClient() {
                 value={note}
                 onChange={(e) => setNote(e.target.value)}
               />
+
+              <div className="mt-4 rounded-xl border border-white/10 bg-black/20 p-3">
+                <p className="text-sm font-medium text-white">Add body photo (today)</p>
+                <div className="mt-2 grid gap-3 sm:grid-cols-[1fr_auto]">
+                  <input
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp,image/heic,image/heif"
+                    multiple
+                    className={fileInputClassName}
+                    onChange={onTodayBodyFileChange}
+                  />
+                  <button
+                    className="h-12 rounded-xl border border-white/20 bg-black/25 px-5 text-sm font-semibold text-white transition hover:border-white/35 hover:bg-black/35 disabled:opacity-60"
+                    onClick={uploadTodayBodyPhoto}
+                    disabled={savingTodayBody}
+                  >
+                    {savingTodayBody ? "Uploading..." : "Upload photo"}
+                  </button>
+                </div>
+              </div>
             </section>
 
             <section className={cardClassName}>
@@ -501,6 +676,26 @@ export default function DashboardClient() {
                     disabled={savingEdit}
                   >
                     {savingEdit ? "Saving..." : "Update"}
+                  </button>
+                </div>
+              </div>
+
+              <div className="mt-4 rounded-xl border border-white/10 bg-black/20 p-3">
+                <p className="text-sm font-medium text-white">Add body photo (selected date)</p>
+                <div className="mt-2 grid gap-3 sm:grid-cols-[1fr_auto]">
+                  <input
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp,image/heic,image/heif"
+                    multiple
+                    className={fileInputClassName}
+                    onChange={onEditBodyFileChange}
+                  />
+                  <button
+                    className="h-12 rounded-xl border border-white/20 bg-black/25 px-5 text-sm font-semibold text-white transition hover:border-white/35 hover:bg-black/35 disabled:opacity-60"
+                    onClick={uploadEditBodyPhoto}
+                    disabled={savingEditBody}
+                  >
+                    {savingEditBody ? "Uploading..." : "Upload photo"}
                   </button>
                 </div>
               </div>
@@ -539,49 +734,45 @@ export default function DashboardClient() {
             )}
           </section>
         </>
-      ) : (
+      ) : activeTab === "foodGallery" ? (
         <>
-          {galleryError ? (
+          {foodError ? (
             <div className="rounded-xl border border-rose-400/60 bg-rose-950/40 p-3 text-sm text-rose-100">
-              <span className="font-medium">Error:</span> {galleryError}
+              <span className="font-medium">Error:</span> {foodError}
             </div>
           ) : null}
 
           <section className={cardClassName}>
             <h2 className="text-lg font-semibold text-white">Upload food photos</h2>
-            <p className="mt-1 text-sm text-slate-300">
-              Share one or more photos with a selected date. Default date is today.
-            </p>
+            <p className="mt-1 text-sm text-slate-300">Share one or more photos with a selected date. Default date is today.</p>
 
             <div className="mt-4 grid gap-3 sm:grid-cols-2">
               <input
                 type="date"
                 className={inputClassName}
-                value={galleryDate}
-                onChange={(e) => setGalleryDate(e.target.value)}
+                value={foodDate}
+                onChange={(e) => setFoodDate(e.target.value)}
                 max={todayKey}
               />
               <input
                 type="file"
                 accept="image/jpeg,image/png,image/webp,image/heic,image/heif"
                 multiple
-                className="h-12 w-full rounded-xl border border-white/15 bg-black/35 px-3 py-2 text-sm leading-normal text-slate-200 file:mr-3 file:h-8 file:rounded-lg file:border-0 file:bg-white file:px-3 file:py-0 file:text-sm file:font-semibold file:leading-8 file:text-black file:align-middle"
-                onChange={onGalleryFileChange}
+                className={fileInputClassName}
+                onChange={onFoodFileChange}
               />
             </div>
 
             <div className="mt-3 text-sm text-slate-300">
-              {galleryFiles.length > 0
-                ? `${galleryFiles.length} file(s) selected`
-                : "No files selected"}
+              {foodFiles.length > 0 ? `${foodFiles.length} file(s) selected` : "No files selected"}
             </div>
 
             <button
               className="mt-4 h-12 rounded-xl bg-white px-5 text-base font-semibold text-black transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-60"
-              onClick={saveGalleryImages}
-              disabled={gallerySaving}
+              onClick={saveFoodImages}
+              disabled={foodSaving}
             >
-              {gallerySaving ? "Uploading..." : "Upload photos"}
+              {foodSaving ? "Uploading..." : "Upload photos"}
             </button>
           </section>
 
@@ -594,8 +785,8 @@ export default function DashboardClient() {
                   <input
                     type="checkbox"
                     className="h-4 w-4 accent-indigo-400"
-                    checked={onlyMyPhotos}
-                    onChange={(e) => setOnlyMyPhotos(e.target.checked)}
+                    checked={onlyMyFoodPhotos}
+                    onChange={(e) => setOnlyMyFoodPhotos(e.target.checked)}
                   />
                   Only my photos
                 </label>
@@ -604,8 +795,8 @@ export default function DashboardClient() {
                   <span>Sort by</span>
                   <select
                     className="h-9 rounded-lg border border-white/20 bg-black/35 px-2 text-sm text-white outline-none focus:border-white/40"
-                    value={gallerySortBy}
-                    onChange={(e) => setGallerySortBy(e.target.value as GallerySortBy)}
+                    value={foodSortBy}
+                    onChange={(e) => setFoodSortBy(e.target.value as GallerySortBy)}
                   >
                     <option value="date">Date</option>
                     <option value="person">Person</option>
@@ -616,8 +807,8 @@ export default function DashboardClient() {
                   <span>Order</span>
                   <select
                     className="h-9 rounded-lg border border-white/20 bg-black/35 px-2 text-sm text-white outline-none focus:border-white/40"
-                    value={gallerySortDir}
-                    onChange={(e) => setGallerySortDir(e.target.value as GallerySortDir)}
+                    value={foodSortDir}
+                    onChange={(e) => setFoodSortDir(e.target.value as GallerySortDir)}
                   >
                     <option value="desc">Newest / Z→A</option>
                     <option value="asc">Oldest / A→Z</option>
@@ -626,23 +817,16 @@ export default function DashboardClient() {
               </div>
             </div>
 
-            {galleryItems.length === 0 && !galleryLoading ? (
+            {foodItems.length === 0 && !foodLoading ? (
               <p className="text-slate-300">No food photos yet.</p>
             ) : (
               <>
                 <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                  {sortedGalleryItems.map((photo) => {
+                  {sortedFoodItems.map((photo) => {
                     const isMine = photo.userId === userId;
                     return (
-                      <article
-                        key={photo.id}
-                        className="overflow-hidden rounded-xl border border-white/10 bg-black/30"
-                      >
-                        <button
-                          type="button"
-                          className="block w-full cursor-zoom-in"
-                          onClick={() => setExpandedPhoto(photo)}
-                        >
+                      <article key={photo.id} className="overflow-hidden rounded-xl border border-white/10 bg-black/30">
+                        <button type="button" className="block w-full cursor-zoom-in" onClick={() => setExpandedFoodPhoto(photo)}>
                           <Image
                             src={photo.imageDataUrl}
                             alt={`${photo.userId} food on ${photo.dateKey}`}
@@ -659,10 +843,10 @@ export default function DashboardClient() {
                             <button
                               type="button"
                               className="rounded-md border border-rose-400/70 px-3 py-1 text-xs text-rose-200 transition hover:bg-rose-500/20 disabled:opacity-60"
-                              onClick={() => deletePhoto(photo.id)}
-                              disabled={galleryDeletingId === photo.id}
+                              onClick={() => deleteFoodPhoto(photo.id)}
+                              disabled={foodDeletingId === photo.id}
                             >
-                              {galleryDeletingId === photo.id ? "Deleting..." : "Delete"}
+                              {foodDeletingId === photo.id ? "Deleting..." : "Delete"}
                             </button>
                           ) : null}
                         </div>
@@ -672,14 +856,14 @@ export default function DashboardClient() {
                 </div>
 
                 <div className="mt-4 flex justify-center">
-                  {galleryHasMore ? (
+                  {foodHasMore ? (
                     <button
                       type="button"
                       className="h-11 rounded-xl border border-white/25 px-4 text-sm font-semibold text-white transition hover:border-white/40 hover:bg-white/10 disabled:opacity-60"
-                      onClick={() => loadGallery(false)}
-                      disabled={galleryLoadingMore}
+                      onClick={() => loadFoodGallery(false)}
+                      disabled={foodLoadingMore}
                     >
-                      {galleryLoadingMore ? "Loading..." : "Show older photos"}
+                      {foodLoadingMore ? "Loading..." : "Show older photos"}
                     </button>
                   ) : (
                     <p className="text-sm text-slate-400">You reached the oldest photo.</p>
@@ -689,35 +873,183 @@ export default function DashboardClient() {
             )}
           </section>
 
-          {expandedPhoto ? (
-            <div
-              className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4"
-              onClick={() => setExpandedPhoto(null)}
-            >
-              <div
-                className="max-h-[95vh] w-full max-w-4xl rounded-2xl border border-white/20 bg-slate-950 p-3"
-                onClick={(e) => e.stopPropagation()}
-              >
+          {expandedFoodPhoto ? (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4" onClick={() => setExpandedFoodPhoto(null)}>
+              <div className="max-h-[95vh] w-full max-w-4xl rounded-2xl border border-white/20 bg-slate-950 p-3" onClick={(e) => e.stopPropagation()}>
                 <div className="mb-3 flex items-center justify-between text-sm text-slate-200">
                   <div>
-                    <span className="font-semibold text-white">{expandedPhoto.userId}</span> · {expandedPhoto.dateKey}
+                    <span className="font-semibold text-white">{expandedFoodPhoto.userId}</span> · {expandedFoodPhoto.dateKey}
                   </div>
                   <button
                     type="button"
                     className="rounded-md border border-white/30 px-3 py-1 text-xs text-white hover:bg-white/10"
-                    onClick={() => setExpandedPhoto(null)}
+                    onClick={() => setExpandedFoodPhoto(null)}
                   >
                     Close
                   </button>
                 </div>
                 <Image
-                  src={expandedPhoto.imageDataUrl}
-                  alt={`${expandedPhoto.userId} food on ${expandedPhoto.dateKey}`}
+                  src={expandedFoodPhoto.imageDataUrl}
+                  alt={`${expandedFoodPhoto.userId} food on ${expandedFoodPhoto.dateKey}`}
                   width={1200}
                   height={900}
                   className="max-h-[80vh] w-full rounded-lg object-contain"
                   unoptimized
                 />
+              </div>
+            </div>
+          ) : null}
+        </>
+      ) : (
+        <>
+          {progressError ? (
+            <div className="rounded-xl border border-rose-400/60 bg-rose-950/40 p-3 text-sm text-rose-100">
+              <span className="font-medium">Error:</span> {progressError}
+            </div>
+          ) : null}
+
+          <section className={cardClassName}>
+            <h2 className="text-lg font-semibold text-white">Upload body progression photos</h2>
+            <p className="mt-1 text-sm text-slate-300">Upload your own body photos and review change over time.</p>
+            <div className="mt-4 grid gap-3 sm:grid-cols-2">
+              <input
+                type="date"
+                className={inputClassName}
+                value={progressDate}
+                onChange={(e) => setProgressDate(e.target.value)}
+                max={todayKey}
+              />
+              <input
+                type="file"
+                accept="image/jpeg,image/png,image/webp,image/heic,image/heif"
+                multiple
+                className={fileInputClassName}
+                onChange={onProgressFileChange}
+              />
+            </div>
+            <div className="mt-3 text-sm text-slate-300">
+              {progressFiles.length > 0 ? `${progressFiles.length} file(s) selected` : "No files selected"}
+            </div>
+            <button
+              className="mt-4 h-12 rounded-xl bg-white px-5 text-base font-semibold text-black transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-60"
+              onClick={saveProgressImages}
+              disabled={progressSaving}
+            >
+              {progressSaving ? "Uploading..." : "Upload photos"}
+            </button>
+          </section>
+
+          <section className={cardClassName}>
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+              <h2 className="text-lg font-semibold text-white">Progression gallery</h2>
+              <label className="flex items-center gap-2 text-sm text-slate-200">
+                <span>Order</span>
+                <select
+                  className="h-9 rounded-lg border border-white/20 bg-black/35 px-2 text-sm text-white outline-none focus:border-white/40"
+                  value={progressSortDir}
+                  onChange={(e) => setProgressSortDir(e.target.value as ProgressSortDir)}
+                >
+                  <option value="desc">Newest first</option>
+                  <option value="asc">Oldest first</option>
+                </select>
+              </label>
+            </div>
+
+            {progressItems.length === 0 && !progressLoading ? (
+              <p className="text-slate-300">No body progression photos yet.</p>
+            ) : (
+              <>
+                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                  {sortedProgressItems.map((photo, index) => (
+                    <article key={photo.id} className="overflow-hidden rounded-xl border border-white/10 bg-black/30">
+                      <button type="button" className="block w-full cursor-zoom-in" onClick={() => setExpandedProgressIndex(index)}>
+                        <Image
+                          src={photo.imageDataUrl}
+                          alt={`${photo.userId} progression on ${photo.dateKey}`}
+                          width={640}
+                          height={480}
+                          className="h-56 w-full object-cover"
+                          unoptimized
+                        />
+                      </button>
+                      <div className="space-y-2 px-3 py-2 text-sm text-slate-200">
+                        <div className="font-mono">{photo.dateKey}</div>
+                        <button
+                          type="button"
+                          className="rounded-md border border-rose-400/70 px-3 py-1 text-xs text-rose-200 transition hover:bg-rose-500/20 disabled:opacity-60"
+                          onClick={() => deleteBodyPhoto(photo.id)}
+                          disabled={progressDeletingId === photo.id}
+                        >
+                          {progressDeletingId === photo.id ? "Deleting..." : "Delete"}
+                        </button>
+                      </div>
+                    </article>
+                  ))}
+                </div>
+
+                <div className="mt-4 flex justify-center">
+                  {progressHasMore ? (
+                    <button
+                      type="button"
+                      className="h-11 rounded-xl border border-white/25 px-4 text-sm font-semibold text-white transition hover:border-white/40 hover:bg-white/10 disabled:opacity-60"
+                      onClick={() => loadProgressGallery(false)}
+                      disabled={progressLoadingMore}
+                    >
+                      {progressLoadingMore ? "Loading..." : "Show older photos"}
+                    </button>
+                  ) : (
+                    <p className="text-sm text-slate-400">You reached the oldest photo.</p>
+                  )}
+                </div>
+              </>
+            )}
+          </section>
+
+          {expandedProgressPhoto ? (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 p-4" onClick={() => setExpandedProgressIndex(null)}>
+              <div className="w-full max-w-5xl rounded-2xl border border-white/20 bg-slate-950 p-3" onClick={(e) => e.stopPropagation()}>
+                <div className="mb-3 flex items-center justify-between text-sm text-slate-200">
+                  <div className="font-mono">{expandedProgressPhoto.dateKey}</div>
+                  <button
+                    type="button"
+                    className="rounded-md border border-white/30 px-3 py-1 text-xs text-white hover:bg-white/10"
+                    onClick={() => setExpandedProgressIndex(null)}
+                  >
+                    Close
+                  </button>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    className="h-10 w-10 shrink-0 rounded-full border border-white/30 text-lg text-white hover:bg-white/10"
+                    onClick={() => {
+                      if (sortedProgressItems.length === 0 || expandedProgressIndex == null) return;
+                      setExpandedProgressIndex(
+                        (expandedProgressIndex - 1 + sortedProgressItems.length) % sortedProgressItems.length
+                      );
+                    }}
+                  >
+                    ‹
+                  </button>
+                  <Image
+                    src={expandedProgressPhoto.imageDataUrl}
+                    alt={`${expandedProgressPhoto.userId} progression on ${expandedProgressPhoto.dateKey}`}
+                    width={1400}
+                    height={1000}
+                    className="max-h-[80vh] w-full rounded-lg object-contain"
+                    unoptimized
+                  />
+                  <button
+                    type="button"
+                    className="h-10 w-10 shrink-0 rounded-full border border-white/30 text-lg text-white hover:bg-white/10"
+                    onClick={() => {
+                      if (sortedProgressItems.length === 0 || expandedProgressIndex == null) return;
+                      setExpandedProgressIndex((expandedProgressIndex + 1) % sortedProgressItems.length);
+                    }}
+                  >
+                    ›
+                  </button>
+                </div>
               </div>
             </div>
           ) : null}
