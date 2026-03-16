@@ -565,7 +565,7 @@ export default function DashboardClient() {
                 type="file"
                 accept="image/jpeg,image/png,image/webp,image/heic,image/heif"
                 multiple
-                className="h-12 w-full rounded-xl border border-white/15 bg-black/35 px-3 text-sm leading-[3rem] text-slate-200 file:mr-3 file:h-8 file:rounded-lg file:border-0 file:bg-white file:px-3 file:py-0 file:text-sm file:font-semibold file:leading-8 file:text-black file:align-middle"
+                className="h-12 w-full rounded-xl border border-white/15 bg-black/35 px-3 py-2 text-sm leading-normal text-slate-200 file:mr-3 file:h-8 file:rounded-lg file:border-0 file:bg-white file:px-3 file:py-0 file:text-sm file:font-semibold file:leading-8 file:text-black file:align-middle"
                 onChange={onGalleryFileChange}
               />
             </div>
